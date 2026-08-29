@@ -1,0 +1,10 @@
+action: rdma-rail-fail-closed
+domain: cluster
+fault_domain: production-training-fabric
+level: L0
+region: cluster-a / production
+certified_by: []
+evidence:
+  - runs/ib-flap/plan.txt
+reviewer: fabric-oncall
+notes: "real fabric fault is irreversible-in-effect; stays human-authorized."

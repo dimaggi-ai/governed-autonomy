@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "Governed Autonomy for GPU Clusters and Networks: from human intent to nanosecond in-ASIC reflexes"
+authors:
+  - family-names: Nanyonga
+    given-names: Margaret
+    affiliation: DIMAGGI AI
+repository-code: "https://github.com/dimaggi-ai/governed-autonomy"
+license: MIT
+year: 2026
+keywords:
+  - autonomous networks
+  - governed autonomy
+  - intent-based networking
+  - latency hierarchy
+  - O-RAN
+  - AI infrastructure

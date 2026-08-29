@@ -1,0 +1,15 @@
+action: cordon-on-xid-48
+domain: cluster
+fault_domain: accelerator
+level: L2
+region: cluster-a / tenant-research / staging
+certified_by:
+  - dcgm-ecc-dbe-inject      # from ai-cluster-chaos-fidelity catalog
+  - inforom-corrupt-inject
+evidence:
+  - runs/xid48/metrics.json
+  - runs/xid48/abort-log.txt
+abort_never_missed: true
+reversible: true
+reviewer: platform-oncall
+notes: "known-fatal-GPU cordon; green over 12 runs, abort never missed."

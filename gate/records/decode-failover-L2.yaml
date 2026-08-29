@@ -1,0 +1,12 @@
+action: decode-replica-failover
+domain: cluster
+fault_domain: inference-graph
+level: L2
+region: cluster-a / tenant-serving / staging
+certified_by:
+  - decode-replica-kill
+evidence:
+  - runs/decode/ttft.json
+abort_never_missed: true
+reversible: true
+reviewer: serving-oncall

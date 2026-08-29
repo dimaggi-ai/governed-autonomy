@@ -1,0 +1,104 @@
+[
+  {
+    "label": "Clock sync (White Rabbit / PTP-HA)",
+    "seconds": 1e-10,
+    "tier": "measurement",
+    "ref": "1"
+  },
+  {
+    "label": "Switch ASIC cut-through forwarding",
+    "seconds": 1e-07,
+    "tier": "reflex",
+    "ref": "2"
+  },
+  {
+    "label": "Per-packet adaptive routing / P4 match-action",
+    "seconds": 1e-07,
+    "tier": "reflex",
+    "ref": "3"
+  },
+  {
+    "label": "Inline FEC (RS-544 'KP4')",
+    "seconds": 1.5e-07,
+    "tier": "reflex",
+    "ref": "4"
+  },
+  {
+    "label": "PFC pause loop",
+    "seconds": 5e-06,
+    "tier": "reflex",
+    "ref": "5"
+  },
+  {
+    "label": "Self-healing link reroute (IB SHIELD)",
+    "seconds": 0.0005,
+    "tier": "reflex",
+    "ref": "3"
+  },
+  {
+    "label": "BFD detection floor (3.3 ms x3)",
+    "seconds": 0.01,
+    "tier": "detection",
+    "ref": "6"
+  },
+  {
+    "label": "Real-time RAN loop (O-DU/O-RU)",
+    "seconds": 0.008,
+    "tier": "control",
+    "ref": "7"
+  },
+  {
+    "label": "Near-RT RIC xApps",
+    "seconds": 0.3,
+    "tier": "control",
+    "ref": "7"
+  },
+  {
+    "label": "OCS hardware switch (MEMS)",
+    "seconds": 0.015,
+    "tier": "control",
+    "ref": "9"
+  },
+  {
+    "label": "IP FRR / TI-LFA / optical APS (<50 ms)",
+    "seconds": 0.04,
+    "tier": "control",
+    "ref": "10"
+  },
+  {
+    "label": "IGP convergence (tuned)",
+    "seconds": 0.5,
+    "tier": "control",
+    "ref": "11"
+  },
+  {
+    "label": "Non-RT RIC rApps",
+    "seconds": 10.0,
+    "tier": "policy",
+    "ref": "7"
+  },
+  {
+    "label": "gNMI telemetry (practice)",
+    "seconds": 10.0,
+    "tier": "sensing",
+    "ref": "12"
+  },
+  {
+    "label": "BGP convergence (node failure)",
+    "seconds": 300.0,
+    "tier": "policy",
+    "ref": "11"
+  },
+  {
+    "label": "LLM planner deliberation",
+    "seconds": 60.0,
+    "tier": "cognition",
+    "ref": "13"
+  },
+  {
+    "label": "TMF intent / assurance loop",
+    "seconds": 300.0,
+    "tier": "cognition",
+    "ref": "14"
+  }
+]

@@ -1,0 +1,16 @@
+action: single-tenant-inference-heal-and-admit
+domain: cluster
+fault_domain: inference-graph
+level: L4
+region: serving-pool-west (single declared pool)
+certified_by:
+  - decode-replica-kill
+  - planner-kill-mid-heal        # control-plane-dark drill
+  - healer-illegal-proposal
+evidence:
+  - runs/pool-west/full-suite.json
+  - runs/pool-west/rollback-drill.json
+  - runs/pool-west/control-plane-dark.json
+abort_never_missed: true
+reversible: true
+reviewer: platform-oncall

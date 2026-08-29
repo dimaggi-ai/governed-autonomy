@@ -1,0 +1,14 @@
+action: decode-role-rescale-under-slo
+domain: cluster
+fault_domain: inference-graph
+level: L3
+region: cluster-a / tenant-serving / production (sampled review)
+certified_by:
+  - decode-replica-kill
+evidence:
+  - runs/rescale/quality-canary.json      # live-traffic quality canary held
+  - runs/rescale/gpu-second-budget.json   # wasted-GPU-second budget held on live traffic
+abort_never_missed: true
+reversible: true
+reviewer: serving-oncall
+notes: "L3: auto with sampled human review; canary + GPU-second budget held on live traffic."
