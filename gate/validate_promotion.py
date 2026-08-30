@@ -111,12 +111,19 @@ def validate(rec: dict, name: str) -> list[str]:
     return errs
 
 
-def main(argv: list[str]) -> int:
+def _collect(args: list[str]) -> list:
     here = Path(__file__).resolve().parent
-    paths = ([Path(p) for p in argv[1:]] if len(argv) > 1
-             else sorted((here / "records").glob("*.yaml")))
+    raw = [Path(a) for a in args] if args else [here / "records"]
+    out = []
+    for p in raw:
+        out.extend(sorted(p.glob("*.yaml")) if p.is_dir() else [p])
+    return out
+
+
+def main(argv: list[str]) -> int:
+    paths = _collect(argv[1:])
     if not paths:
-        print("no promotion records found")
+        print("no promotion records found (pass a .yaml record or a directory)")
         return 1
     all_errs: list[str] = []
     for p in paths:
@@ -135,6 +142,11 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"\nall {len(paths)} promotion records valid")
     return 0
+
+
+def cli() -> None:
+    """Console entry point (`promotion-gate [record.yaml | dir ...]`)."""
+    raise SystemExit(main(sys.argv))
 
 
 if __name__ == "__main__":

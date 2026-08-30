@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "governed-autonomy-gate"
+version = "1.0.0"
+description = "Autonomy-promotion gate: refuse unearned promotions up the L0-L4 autonomy ladder unless certified by a chaos experiment."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Margaret Nanyonga" }]
+keywords = ["autonomous-networks", "governance", "ai-infrastructure", "autonomy"]
+dependencies = ["pyyaml>=6.0"]
+
+[project.urls]
+Homepage = "https://github.com/dimaggi-ai/governed-autonomy"
+
+[project.scripts]
+promotion-gate = "gate.validate_promotion:cli"
+
+[tool.setuptools]
+packages = ["gate"]
+
+[tool.setuptools.package-data]
+gate = ["records/*.yaml"]

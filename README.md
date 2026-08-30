@@ -28,6 +28,13 @@ make test        # promotion-gate validator + rejection tests
 make exhibit     # regenerate the latency-hierarchy figure from its data file
 ```
 
+Or install the gate as a command and check your own promotion records:
+
+```
+pip install git+https://github.com/dimaggi-ai/governed-autonomy
+promotion-gate my-promotion-record.yaml    # refuse it if the level is unearned
+```
+
 ## Honest scope
 
 This is an **architecture and a sourced latency map**, not a cluster or network simulator — the quantitative work lives in the sibling repos. The network chapter is standards-aligned prose evidenced by early public field demonstrations, not a benchmark; where an earlier draft paraphrased TM Forum or O-RAN loosely, the corrected framing is stated inline. The [latency hierarchy](docs/latency-hierarchy.md#three-honest-qualifications) carries its own qualifications (the nanosecond tier is thin; the sensing floor binds first).
