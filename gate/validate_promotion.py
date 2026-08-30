@@ -121,6 +121,15 @@ def _collect(args: list[str]) -> list:
 
 
 def main(argv: list[str]) -> int:
+    if any(a in ("-h", "--help") for a in argv[1:]):
+        print(
+            "promotion-gate — check autonomy-promotion records against the L0-L4 gate.\n\n"
+            "Usage:\n"
+            "  promotion-gate [RECORD.yaml | DIR ...]\n\n"
+            "With no arguments, validates the bundled reference records.\n"
+            "Exit status: 0 if all records pass the gate, 1 otherwise."
+        )
+        return 0
     paths = _collect(argv[1:])
     if not paths:
         print("no promotion records found (pass a .yaml record or a directory)")

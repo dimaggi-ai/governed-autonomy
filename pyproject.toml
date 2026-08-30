@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "governed-autonomy-gate"
-version = "1.0.0"
+version = "1.0.1"
 description = "Autonomy-promotion gate: refuse unearned promotions up the L0-L4 autonomy ladder unless certified by a chaos experiment."
 readme = "README.md"
 requires-python = ">=3.11"
