@@ -31,9 +31,13 @@ make exhibit     # regenerate the latency-hierarchy figure from its data file
 Or install the gate as a command and check your own promotion records:
 
 ```
-pip install git+https://github.com/dimaggi-ai/governed-autonomy
+pip install governed-autonomy-gate         # from PyPI
 promotion-gate my-promotion-record.yaml    # refuse it if the level is unearned
+promotion-gate                             # check the bundled reference records
+promotion-gate --help                      # usage
 ```
+
+(Or install the latest from source: `pip install git+https://github.com/dimaggi-ai/governed-autonomy`.)
 
 ## Honest scope
 
