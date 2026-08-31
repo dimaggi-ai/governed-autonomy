@@ -12,10 +12,15 @@ jobs:
       - name: Promotion-gate validator + tests
         run: |
           cd gate && python3 validate_promotion.py && python3 test_gate.py
-      - name: Latency exhibit regenerates identically to what is committed
+      # The JSON is the exhibit's data file and IS byte-reproducible, so an
+      # edit to it that was never regenerated fails here. The PNG is not:
+      # matplotlib/freetype render text differently across builds, so its
+      # bytes differ between this runner and any contributor's machine.
+      # Checking it would test the environment, not the exhibit.
+      - name: Latency exhibit data regenerates identically to what is committed
         run: |
           cd exhibit && python3 latency_ladder.py
-          cd .. && git diff --exit-code -- exhibit/latency_ladder.json figures/
+          cd .. && git diff --exit-code -- exhibit/latency_ladder.json
       - name: Validation - ladder quoting fidelity + synthetic gate records
         run: |
           cd exhibit && python3 validate_ladder.py
