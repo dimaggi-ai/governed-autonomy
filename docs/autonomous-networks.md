@@ -23,7 +23,7 @@ TM Forum's Autonomous Networks framework defines levels **L0–L5** (IG1218 fram
 
 ## O-RAN timescales — the reflex tier is architecturally empty
 
-O-RAN integrates three control loops [7]: **non-real-time** (rApps, >1 s), **near-real-time** (xApps, 10 ms–1 s), and **real-time** (<10 ms) — which lives in the O-DU/O-RU and is explicitly **not in a RIC**; the specs "lack a practical approach" below 10 ms, and the proposed extension (dApps on the DU) is the [latency hierarchy's](latency-hierarchy.md) "compile downward" move again. The intent-to-action schema layer is real and standard: TMF921 intent objects, YANG/NETCONF/gNMI for configuration, O-RAN A1/E2 for RIC policy [7, 16].
+O-RAN integrates three control loops [7]: **non-real-time** (rApps, >1 s), **near-real-time** (xApps, 10 ms–1 s), and **real-time** (<10 ms) — which lives in the O-DU/O-RU and is explicitly **not in a RIC**; the survey notes these loops are not part of the current O-RAN architecture and are left for further study, and the proposed extension (dApps on the DU) is the [latency hierarchy's](latency-hierarchy.md) "compile downward" move again. The intent-to-action schema layer is real and standard: TMF921 intent objects, YANG/NETCONF/gNMI for configuration, O-RAN A1/E2 for RIC policy [7, 16].
 
 ## The pattern already exists in the field
 

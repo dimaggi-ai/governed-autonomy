@@ -13,7 +13,7 @@ Reference numbers point to [REFERENCES.md](../REFERENCES.md). The figure is gene
 | Rung | Timescale | Nature | Source |
 |---|---|---|---|
 | Clock sync (White Rabbit / PTP-HA) | sub-ns (<10 ps over 5 km) | measurement substrate | [1] |
-| Switch ASIC cut-through forwarding | ~100 ns (sub-90–130 ns published) | fixed reflex | [2] |
+| Switch ASIC cut-through forwarding | ~100 ns (QM8790 brief: sub-130 ns; Quantum-X800 <100 ns) | fixed reflex | [2] |
 | Per-packet adaptive routing; P4 match-action | ns per packet at 400 G | parameterized reflex (Subnet Manager configures, ASIC decides) | [3] |
 | Inline FEC (RS-544 "KP4") | ~100–200 ns, in the PCS | fixed reflex | [4] |
 | PFC pause loop | ~1–10 µs | fixed reflex | [5] |
@@ -25,7 +25,7 @@ Reference numbers point to [REFERENCES.md](../REFERENCES.md). The figure is gene
 | IP FRR / TI-LFA / optical APS | <50 ms (pre-computed backup paths) | pre-computed protection | [10] |
 | IGP convergence (tuned) | hundreds of ms – 1 s | distributed recompute | [11] |
 | Non-RT RIC rApps | >1 s (tens of s – min) | policy tier | [7] |
-| gNMI telemetry (practice) | 1–30 s typical (spec allows ns) | sensing | [12] |
+| gNMI telemetry (practice) | 5–30 s typical (spec allows ns) | sensing | [12] |
 | BGP convergence (node failure) | seconds – minutes | inter-domain | [11] |
 | LLM planner deliberation | seconds – minutes | cognition | [13] |
 | TMF intent / assurance loop | minutes | intent tier | [14] |
@@ -34,13 +34,13 @@ Reference numbers point to [REFERENCES.md](../REFERENCES.md). The figure is gene
 
 - **Every nanosecond mechanism is a reflex whose parameters were installed by a slower authority.** The Subnet Manager configures adaptive-routing groups; the ASIC picks the port per packet [3]. The P4 compiler installs the pipeline; the pipeline enforces per packet — sub-microsecond in-network inference has been demonstrated on programmable switches [3]. FEC parameters are standardized once and executed forever [4]. No cognition exists at nanosecond timescale anywhere.
 - **The 50 ms protection lineage is a 30-year-old instance of the thesis:** "pre-computed backup paths and pre-installed forwarding state, not real-time path computation during a failure event." TI-LFA (RFC 9855) is certified-policy-compiled-downward, standardized [10].
-- **O-RAN institutionalizes the timescale separation** the thesis needs: cognition in rApps (>1 s), tactical control in xApps (10 ms–1 s), and an explicit architectural *absence* below 10 ms — the specs "lack a practical approach" there; the proposed fix (dApps on the DU) is compiling downward again [7, 8].
+- **O-RAN institutionalizes the timescale separation** the thesis needs: cognition in rApps (>1 s), tactical control in xApps (10 ms–1 s), and an explicit architectural *absence* below 10 ms — the survey notes these loops are not part of the current O-RAN architecture and are left for further study; the proposed fix (dApps on the DU) is compiling downward again [7, 8].
 - **OCS is the cleanest case study:** the hardware switches in milliseconds, but production reconfiguration is drain → reconfigure → BERT-qualify → release, orchestrated by SDN — **certification dominates the loop time, deliberately** [9].
 
 ## Three honest qualifications
 
 1. **The nanosecond tier is thinner than the slogan.** Genuinely ns: forwarding, FEC, per-packet path choice. Then µs (PFC), then ms (BFD, FRR, OCS). "Nanosecond-scale autonomous decision-making" is not plausible on current evidence; nanosecond-scale *enforcement of certified policy* is already shipping.
-2. **The sensing floor binds before the actuation floor.** gNMI telemetry runs at 1–30 s in practice [12], so any centrally-fed loop closes at seconds no matter how fast the decision. Policy can be pushed down only as far as *local* sensing exists — which is exactly what the reflex tier has.
+2. **The sensing floor binds before the actuation floor.** gNMI telemetry runs at 5–30 s in practice [12], so any centrally-fed loop closes at seconds no matter how fast the decision. Policy can be pushed down only as far as *local* sensing exists — which is exactly what the reflex tier has.
 3. **The frontier is moving from below.** OCS forecasts µs switching [9]; P4 puts small *learned* models (never LLMs) at line rate [3]; dApps target sub-10 ms RAN [7, 8]. "How far down can certified policy go" is a live engineering race — and the answer is already sub-microsecond for compiled models.
 
 This is why the [governed-autonomy architecture](architecture.md) separates the planes it does, and why promotion up the [autonomy ladder](architecture.md#the-autonomy-ladder) is gated on certification — the same discipline the [chaos-fidelity standard](https://github.com/dimaggi-ai/ai-cluster-chaos-fidelity) enforces one layer down.

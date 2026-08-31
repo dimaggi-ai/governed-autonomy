@@ -36,6 +36,8 @@ DOMAINS = ("cluster", "network")
 REQUIRED = ("action", "domain", "level", "region", "fault_domain", "evidence", "reviewer")
 # domains where a real fault is irreversible/dangerous: capped at L1
 CAPPED_L1 = ("production-training-fabric", "power-interlock", "optical-live-fiber")
+# reviewer names that are not a human sign-off
+MACHINE_IDENTITIES = ("auto", "agent", "planner", "system", "referee")
 
 
 def validate(rec: dict, name: str) -> list[str]:
@@ -65,8 +67,7 @@ def validate(rec: dict, name: str) -> list[str]:
         evidence = [evidence]
 
     # L0/L1: a human must authorize (not a machine identity)
-    if lvl <= 1 and str(rec.get("reviewer", "")).strip().lower() in (
-        "auto", "agent", "planner", "system", "referee"):
+    if lvl <= 1 and str(rec.get("reviewer", "")).strip().lower() in MACHINE_IDENTITIES:
         err("L0/L1 requires a named human reviewer, not a machine identity")
 
     # L2+: must be earned by a green experiment, with evidence and abort held,
@@ -77,6 +78,9 @@ def validate(rec: dict, name: str) -> list[str]:
         if not certs:
             err(f"{rec['level']} requires >=1 certifying chaos experiment in 'certified_by'")
         if not evidence:
+            # Reachable only for falsy values the REQUIRED sweep does not
+            # list (0, False, {}) — narrow, but it fails closed rather than
+            # letting a falsy evidence field through at L2+.
             err(f"{rec['level']} requires evidence paths")
         if rec.get("abort_never_missed") is not True:
             err(f"{rec['level']} requires abort_never_missed: true")
@@ -84,16 +88,20 @@ def validate(rec: dict, name: str) -> list[str]:
             err(f"{rec['level']} requires reversible: true (fail-closed on irreversibility)")
 
     # L3: the live-traffic bar — a quality canary and a held GPU-second budget,
-    # strictly above L2's staged evidence
-    if rec["level"] == "L3":
+    # strictly above L2's staged evidence. Note `lvl >= 3`, not `== "L3"`: the
+    # ladder must be monotone, so L4 inherits every L3 requirement. (It did
+    # not before, which made L4 cheaper to claim than L3.)
+    if lvl >= 3:
         joined3 = " ".join(str(x) for x in list(certs) + list(evidence)).lower()
         if "canary" not in joined3:
-            err("L3 requires a live-traffic quality canary in certified_by/evidence")
+            err(f"{rec['level']} requires a live-traffic quality canary "
+                f"(the L3 bar) in certified_by/evidence")
         if "budget" not in joined3 and "gpu-second" not in joined3:
-            err("L3 requires a held wasted-GPU-second budget in certified_by/evidence")
+            err(f"{rec['level']} requires a held wasted-GPU-second budget "
+                f"(the L3 bar) in certified_by/evidence")
 
-    # L4: hardest drills + single pool
-    if rec["level"] == "L4":
+    # L4: hardest drills + single pool, on top of everything L3 requires
+    if lvl >= 4:
         joined = " ".join(str(x) for x in list(certs) + list(evidence)).lower()
         if "control-plane-dark" not in joined and "planner-dark" not in joined:
             err("L4 requires a control-plane-dark drill in certified_by/evidence")

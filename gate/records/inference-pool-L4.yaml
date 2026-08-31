@@ -11,6 +11,8 @@ evidence:
   - runs/pool-west/full-suite.json
   - runs/pool-west/rollback-drill.json
   - runs/pool-west/control-plane-dark.json
+  - runs/pool-west/live-canary-quality.json   # the L3 bar, inherited
+  - runs/pool-west/gpu-second-budget-held.json
 abort_never_missed: true
 reversible: true
 reviewer: platform-oncall

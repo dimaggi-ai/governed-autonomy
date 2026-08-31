@@ -24,7 +24,7 @@ Consistent with the standard's "fail the PR, not the prose" ethos, [`gate/`](gat
 
 ```
 pip install pyyaml matplotlib
-make test        # promotion-gate validator + rejection tests
+make test        # gate validator + rejection tests + both validation halves
 make exhibit     # regenerate the latency-hierarchy figure from its data file
 ```
 
@@ -38,6 +38,60 @@ promotion-gate --help                      # usage
 ```
 
 (Or install the latest from source: `pip install git+https://github.com/dimaggi-ai/governed-autonomy`.)
+
+## The validation project
+
+This repo is an architecture and a sourced map, not a simulator — so its
+validation is scoped to what it actually claims, and both halves run in
+CI. **Public data:** [exhibit/validate_ladder.py](exhibit/validate_ladder.py)
+checks **16 of the 17** rungs of the latency hierarchy against the band
+its own cited source publishes — and, separately, that each rung *cites
+the reference the band was restated from*, so a rung and its citation
+cannot drift apart. Bands are the source's own numbers, not looser
+prose: the QM8790 brief's sub-130 ns rather than a ~100 ns "class"
+figure, Mission Apollo's stated 10–20 ms rather than "millisecond-scale",
+and BFD's 3.3 ms×3 = 9.9 ms with a ±0.2 ms *rounding* tolerance rather
+than a ±10% envelope. The 17th rung (IB SHIELD) has no published figure
+to check against; it is named in the script's `UNCHECKED` list and
+printed with the results rather than quietly counted as covered.
+
+What this **cannot** do, and the script says so: a numeric band check
+catches a rung that drifts from its source, but not a source
+paraphrased wrongly in REFERENCES.md to begin with. It validates the
+exhibit against its citations, not the citations against their sources.
+
+Structural checks cover the thesis itself: every **deliberative** loop
+(policy, cognition) is at least an order of magnitude slower than every
+**mechanism** that executes pre-authorized policy (measurement, reflex,
+detection, control) — 20× at present. Protection mechanisms like FRR
+and BFD sit on the mechanism side deliberately: FRR is a certified
+policy compiled downward, which *is* the thesis, not a counterexample.
+A companion check asserts the partition covers every tier, so a new
+tier cannot be added without deciding in code which side it falls on.
+
+**Synthetic data:**
+[gate/synthetic_gate_check.py](gate/synthetic_gate_check.py) generates
+102 seeded synthetic promotion records across L0–L4 that must all pass
+the real gate, then applies **36 single-rule mutations** — every rule,
+in every form it can be violated (absent *and* explicitly false), and
+every enumerated value (all five machine identities, all three capped
+fault domains, both levels requiring a human reviewer) — and requires
+each to be refused *for its own rule's stated reason*. The mutated
+record is submitted under a neutral name and the reason is matched
+against the message with that name stripped; submitting it under the
+mutation's own label had made three assertions vacuous, since
+"L3-no-canary" contains "canary". A validator proven only on its own
+bundled examples proves nothing.
+
+This harness found a real gate defect: the ladder was **not monotone**.
+L4 used its own rules but skipped L3's, so an L4 promotion could be
+claimed without a live-traffic quality canary or a held GPU-second
+budget — the bundled L4 record had neither. The gate now reads
+`level >= 3`, and both the record and a regression test were fixed.
+
+```
+make test    # gate + rejection tests + both validation halves
+```
 
 ## Honest scope
 

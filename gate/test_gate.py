@@ -2,7 +2,10 @@
 Run: python3 test_gate.py"""
 from pathlib import Path
 import yaml
-from validate_promotion import validate
+try:
+    from .validate_promotion import validate
+except ImportError:                      # run as a script from gate/
+    from validate_promotion import validate
 
 GOOD_L2 = {
     "action": "cordon-on-xid-48", "domain": "cluster", "fault_domain": "accelerator",
@@ -86,16 +89,36 @@ def test_irreversible_domain_capped_at_l1():
     assert ok == []
 
 
+def test_l4_inherits_the_l3_bar():
+    """The ladder must be monotone: a higher level cannot be cheaper.
+
+    L4 previously used `level == "L4"` for its own rules and `== "L3"`
+    for the live-traffic bar, so an L4 claim skipped the canary and the
+    held budget entirely.
+    """
+    errs = validate(_s(level="L4", region="serving-pool-west",
+                       certified_by=["c"], reversible=True,
+                       abort_never_missed=True,
+                       evidence=["full.json", "rollback-drill.json",
+                                 "control-plane-dark.json"]), "t")
+    assert any("quality canary" in e for e in errs), errs
+    assert any("GPU-second budget" in e for e in errs), errs
+
+
 def test_l4_requires_dark_and_rollback_drills_and_a_pool():
     # missing the drills
     errs = validate(_s(level="L4", region="serving-pool-west",
                        certified_by=["decode-replica-kill"],
                        evidence=["runs/full.json"]), "t")
     assert errs and any("control-plane-dark" in e for e in errs)
-    # complete L4
+    # complete L4 — note it must also clear the L3 bar (the ladder is
+    # monotone: L4 inherits the live-traffic canary and the held budget)
     ok = validate(_s(level="L4", region="serving-pool-west",
                      certified_by=["decode-replica-kill", "planner-kill-mid-heal"],
-                     evidence=["full.json", "rollback-drill.json", "control-plane-dark.json"]), "t")
+                     evidence=["full.json", "rollback-drill.json",
+                               "control-plane-dark.json",
+                               "quality-canary.json",
+                               "gpu-second-budget.json"]), "t")
     assert ok == [], ok
 
 

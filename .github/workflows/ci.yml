@@ -12,5 +12,11 @@ jobs:
       - name: Promotion-gate validator + tests
         run: |
           cd gate && python3 validate_promotion.py && python3 test_gate.py
-      - name: Latency exhibit regenerates
-        run: cd exhibit && python3 latency_ladder.py
+      - name: Latency exhibit regenerates identically to what is committed
+        run: |
+          cd exhibit && python3 latency_ladder.py
+          cd .. && git diff --exit-code -- exhibit/latency_ladder.json figures/
+      - name: Validation - ladder quoting fidelity + synthetic gate records
+        run: |
+          cd exhibit && python3 validate_ladder.py
+          cd ../gate && python3 synthetic_gate_check.py
