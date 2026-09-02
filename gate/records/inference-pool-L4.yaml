@@ -15,4 +15,5 @@ evidence:
   - runs/pool-west/gpu-second-budget-held.json
 abort_never_missed: true
 reversible: true
+proposed_by: healer-agent
 reviewer: platform-oncall

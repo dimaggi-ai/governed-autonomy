@@ -1,0 +1,24 @@
+# A span action the controller may take on its own job, once a person signs the
+# plan. Nothing here reaches past the job that asked for the circuit.
+action: request-circuit
+domain: span
+fault_domain: inter-hall-circuit
+level: L1
+region: campus-east / hall-a -> hall-b / tenant-research
+certified_by: []
+evidence:
+  - runs/circuit-a-b/intent.json
+  - runs/circuit-a-b/dry-run.txt
+blast_radius:
+  halls: 1                 # the circuit terminates on one hall's fabric
+  jobs: 1
+  scope: single-circuit
+  p99_rtt_ms: 0.9
+  mean_rtt_ms: 0.4         # kept alongside the tail, never instead of it
+proposed_by: healer-agent
+reviewer: fabric-oncall
+notes: >-
+  Requesting a circuit is on the short list of span actions that may reach L1.
+  It is capped there because the plant is somebody else's: the vendor API is
+  the only mirror-turning surface, and an intent that fails is a refusal rather
+  than a retry.

@@ -10,5 +10,6 @@ evidence:
   - runs/rescale/gpu-second-budget.json   # wasted-GPU-second budget held on live traffic
 abort_never_missed: true
 reversible: true
+proposed_by: healer-agent
 reviewer: serving-oncall
 notes: "L3: auto with sampled human review; canary + GPU-second budget held on live traffic."

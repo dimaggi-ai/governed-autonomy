@@ -1,0 +1,24 @@
+# Cordoning a slice shrinks the job that owns it. It costs that job its
+# checkpoint and costs nobody else anything, so it is capped at L1 rather than
+# L0.
+action: cordon-slice
+domain: span
+fault_domain: accelerator
+level: L1
+region: campus-east / hall-a / tenant-research
+certified_by:
+  - dcgm-ecc-dbe-inject          # from the ai-cluster-chaos-fidelity catalog
+evidence:
+  - runs/cordon-slice/plan.txt
+  - runs/cordon-slice/rectangle-after.json
+blast_radius:
+  halls: 1
+  jobs: 1
+  scope: rack
+  p99_rtt_ms: 0.6
+proposed_by: detector-agent
+reviewer: platform-oncall
+notes: >-
+  The shrink keeps the hardware and breaks the checkpoint. That is a cost the
+  owning job pays, which is why a person signs it and why no experiment lifts
+  the ceiling.

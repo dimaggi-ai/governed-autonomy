@@ -12,6 +12,17 @@ GOOD_L2 = {
     "level": "L2", "region": "cluster-a / staging",
     "certified_by": ["dcgm-ecc-dbe-inject"], "evidence": ["runs/x/metrics.json"],
     "abort_never_missed": True, "reversible": True, "reviewer": "platform-oncall",
+    "proposed_by": "healer-agent",
+}
+
+GOOD_SPAN_L1 = {
+    "action": "request-circuit", "domain": "span",
+    "fault_domain": "inter-hall-circuit", "level": "L1",
+    "region": "campus-east / hall-a -> hall-b",
+    "certified_by": [], "evidence": ["runs/circuit/dry-run.txt"],
+    "blast_radius": {"halls": 1, "scope": "single-circuit",
+                     "p99_rtt_ms": 0.9},
+    "proposed_by": "healer-agent", "reviewer": "fabric-oncall",
 }
 
 
@@ -19,9 +30,16 @@ def _s(**over):
     s = {**GOOD_L2}; s.update(over); return s
 
 
+def _span(**over):
+    s = {**GOOD_SPAN_L1}
+    radius = {**s["blast_radius"], **over.pop("blast_radius", {})}
+    s.update(over); s["blast_radius"] = radius
+    return s
+
+
 def test_example_records_all_valid():
     recs = sorted((Path(__file__).parent / "records").glob("*.yaml"))
-    assert len(recs) >= 4
+    assert len(recs) >= 8
     for p in recs:
         errs = validate(yaml.safe_load(p.read_text()), p.name)
         assert not errs, (p.name, errs)
@@ -32,7 +50,8 @@ def test_good_l2_passes():
 
 
 def test_missing_required_field_fails():
-    for f in ("action", "domain", "level", "region", "fault_domain", "evidence", "reviewer"):
+    for f in ("action", "domain", "level", "region", "fault_domain", "evidence",
+              "reviewer", "proposed_by"):
         s = _s(); del s[f]
         assert validate(s, "t"), f
 
@@ -120,6 +139,93 @@ def test_l4_requires_dark_and_rollback_drills_and_a_pool():
                                "quality-canary.json",
                                "gpu-second-budget.json"]), "t")
     assert ok == [], ok
+
+
+def test_proposer_cannot_also_be_the_approver():
+    """The Actuate/Guard split, checked rather than asserted."""
+    errs = validate(_s(proposed_by="platform-oncall"), "t")
+    assert errs and "not a control plane" in " ".join(errs)
+
+
+def test_good_span_record_passes():
+    assert validate(_span(), "t") == []
+
+
+def test_a_span_ceiling_is_not_liftable_by_evidence():
+    """The point of the ceiling: a green experiment does not move it.
+
+    `drain-slice` spends a neighbour's compute, so it stays at L0 however well
+    it is understood. Handing this record everything L2 asks for -- a citation,
+    evidence, a held abort, a reversibility claim -- must still fail.
+    """
+    errs = validate(_span(action="drain-slice", level="L2",
+                          certified_by=["metro-cut-inject"],
+                          evidence=["runs/drain/metrics.json"],
+                          abort_never_missed=True, reversible=True), "t")
+    assert errs and "capped at L0" in " ".join(errs)
+
+
+def test_an_l1_span_action_cannot_reach_l2():
+    errs = validate(_span(level="L2", certified_by=["metro-cut-inject"],
+                          abort_never_missed=True, reversible=True), "t")
+    assert errs and "capped at L1" in " ".join(errs)
+    # and L1 on the same action is fine
+    assert validate(_span(), "t") == []
+
+
+def test_an_unknown_span_action_fails_closed():
+    errs = validate(_span(action="reroute-everything"), "t")
+    assert errs and "fails closed" in " ".join(errs)
+
+
+def test_retuning_a_live_collective_has_no_level_at_any_level():
+    for level in ("L0", "L1", "L2", "L3", "L4"):
+        errs = validate(_span(action="retune-live-collective", level=level,
+                              certified_by=["ocs-retune-inject"],
+                              evidence=["runs/retune/x.json"],
+                              abort_never_missed=True, reversible=True), "t")
+        assert errs and "no autonomy level at all" in " ".join(errs), level
+
+
+def test_a_span_record_needs_a_blast_radius():
+    s = _span(); s.pop("blast_radius")
+    errs = validate(s, "t")
+    assert errs and "blast_radius" in " ".join(errs)
+
+
+def test_a_blast_radius_needs_a_scope():
+    """How far one failure reaches is a required field, not an inference."""
+    s = _span()
+    s["blast_radius"] = {"halls": 1, "p99_rtt_ms": 0.9}
+    errs = validate(s, "t")
+    assert errs and "scope" in " ".join(errs)
+
+
+def test_a_mean_only_blast_radius_is_refused():
+    """Average link utilisation is how operators get surprised."""
+    s = _span()
+    s["blast_radius"] = {"halls": 1, "scope": "single-circuit",
+                         "mean_rtt_ms": 0.4}
+    errs = validate(s, "t")
+    assert errs and "average link utilisation" in " ".join(errs)
+    # the mean is welcome once a tail is there too
+    s["blast_radius"]["p99_rtt_ms"] = 0.9
+    assert validate(s, "t") == []
+
+
+def test_two_halls_forces_l0_however_good_the_latency_looks():
+    errs = validate(_span(action="cordon-slice", level="L1",
+                          blast_radius={"halls": 2, "mean_rtt_ms": 0.2}), "t")
+    joined = " ".join(errs)
+    assert errs and "black-hole" in joined
+    # the same action reaching one hall is L1
+    assert validate(_span(action="cordon-slice", level="L1"), "t") == []
+
+
+def test_the_span_domain_does_not_loosen_the_cluster_rules():
+    """A span record still has to be a valid record."""
+    s = _span(); del s["reviewer"]
+    assert validate(s, "t")
 
 
 if __name__ == "__main__":

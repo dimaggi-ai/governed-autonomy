@@ -14,7 +14,11 @@ Rules (see ../docs/architecture.md#the-autonomy-ladder):
   - L4 must include a control-plane-dark drill and a rollback drill in the
     evidence, and be scoped to a single declared pool;
   - physically-irreversible domains (production training fabric, power
-    interlocks) may not be promoted above L1.
+    interlocks) may not be promoted above L1;
+  - whoever proposed the action may not also be the one who approved it;
+  - span actions -- the ones that reach across halls -- carry a ceiling that no
+    evidence lifts, and must state a blast radius with a tail figure in it
+    (see ../docs/span-actions.md).
 
 Usage:
   python3 validate_promotion.py                 # validate every record in records/
@@ -29,15 +33,52 @@ from pathlib import Path
 import yaml
 
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
-DOMAINS = ("cluster", "network")
+DOMAINS = ("cluster", "network", "span")
 # certified_by is required non-empty only at L2+ (enforced below); L0/L1 are
 # human-authorized and may legitimately cite no experiment. fault_domain is
 # required so the irreversibility cap cannot be evaded by omitting it.
-REQUIRED = ("action", "domain", "level", "region", "fault_domain", "evidence", "reviewer")
+# proposed_by is required so the Actuate/Guard split can be checked rather than
+# asserted: a record that does not say who proposed the action cannot show that
+# somebody else approved it.
+REQUIRED = ("action", "domain", "level", "region", "fault_domain", "evidence",
+            "reviewer", "proposed_by")
 # domains where a real fault is irreversible/dangerous: capped at L1
 CAPPED_L1 = ("production-training-fabric", "power-interlock", "optical-live-fiber")
 # reviewer names that are not a human sign-off
 MACHINE_IDENTITIES = ("auto", "agent", "planner", "system", "referee")
+
+# -- span actions -----------------------------------------------------------
+# A job that spans halls can be acted on in a small, closed set of ways. Each
+# carries a ceiling that is a property of the action rather than of the
+# evidence: no number of green experiments promotes it, because what caps it is
+# whose work the action spends, not how well it is understood.
+#
+# The four at L1 touch only the job that asked for them. The four at L0 reach
+# across a job or tenant boundary -- draining a neighbour to make room is
+# spending somebody else's compute -- and a person decides that whatever the
+# size of the slice.
+SPAN_CEILING = {
+    "request-circuit": "L1",
+    "release-circuit": "L1",
+    "cordon-slice": "L1",
+    "delay-checkpoint": "L1",
+    "drain-slice": "L0",
+    "move-job": "L0",
+    "shrink-job": "L0",
+    "reconstitute-slice": "L0",
+}
+# Actions with no level at all. These are not "L0" -- L0 means a person may
+# authorize it; these mean the record should not exist.
+SPAN_FORBIDDEN = {
+    "retune-live-collective":
+        "retuning a circuit underneath a live collective is not an autonomy "
+        "level, it is an outage: the retune is milliseconds and the collective "
+        "is microseconds, so there is no evidence that could promote it",
+}
+# A blast radius stated as an average is the one that surprises operators.
+TAIL_FIELDS = ("p99_rtt_ms", "p999_rtt_ms", "tail_rtt_ms", "p99_9_rtt_ms")
+MEAN_FIELDS = ("mean_rtt_ms", "avg_rtt_ms", "average_rtt_ms",
+               "mean_link_utilization", "avg_link_utilization")
 
 
 def validate(rec: dict, name: str) -> list[str]:
@@ -69,6 +110,15 @@ def validate(rec: dict, name: str) -> list[str]:
     # L0/L1: a human must authorize (not a machine identity)
     if lvl <= 1 and str(rec.get("reviewer", "")).strip().lower() in MACHINE_IDENTITIES:
         err("L0/L1 requires a named human reviewer, not a machine identity")
+
+    # The Actuate/Guard split, checked rather than asserted. Actuate proposes;
+    # Guard approves. One identity doing both is not a control plane, and it is
+    # the failure that drains the wrong hall.
+    if str(rec.get("proposed_by", "")).strip().lower() == str(
+            rec.get("reviewer", "")).strip().lower():
+        err("proposed_by and reviewer are the same identity: Actuate proposes "
+            "and Guard approves, and one process doing both is not a control "
+            "plane")
 
     # L2+: must be earned by a green experiment, with evidence and abort held,
     # and must POSITIVELY assert reversibility (fail closed on irreversibility —
@@ -109,6 +159,58 @@ def validate(rec: dict, name: str) -> list[str]:
             err("L4 requires a rollback drill in certified_by/evidence")
         if not re.search(r"pool", str(rec["region"]).lower()):
             err("L4 must be scoped to a single declared pool (region names a pool)")
+
+    # -- span actions -------------------------------------------------------
+    # A span action's ceiling is a property of the action. Evidence does not
+    # lift it, so this runs whatever the record cites.
+    if rec["domain"] == "span":
+        action = str(rec["action"]).strip().lower()
+        if action in SPAN_FORBIDDEN:
+            err(f"span action '{action}' has no autonomy level at all: "
+                f"{SPAN_FORBIDDEN[action]}")
+        elif action not in SPAN_CEILING:
+            err(f"unknown span action '{action}': the span action set is closed "
+                f"({', '.join(sorted(SPAN_CEILING))}), and an unrecognised "
+                f"action fails closed rather than defaulting to permitted")
+        else:
+            ceiling = SPAN_CEILING[action]
+            if lvl > LEVELS.index(ceiling):
+                err(f"span action '{action}' is capped at {ceiling} and cannot "
+                    f"be {rec['level']}: what caps it is whose work it spends, "
+                    f"not how well it is understood")
+
+        radius = rec.get("blast_radius")
+        if not isinstance(radius, dict):
+            err("a span record requires a 'blast_radius' mapping: a span is "
+                "asked to cross halls, and how far the failure reaches is the "
+                "field the decision turns on")
+        else:
+            halls = radius.get("halls")
+            if not isinstance(halls, int) or halls < 1:
+                err("blast_radius.halls must be an integer >= 1")
+            elif halls >= 2 and lvl > 0:
+                err(f"blast_radius.halls is {halls}: a span that can black-hole "
+                    f"more than one hall is L0 whatever its latency looks like, "
+                    f"and cannot be {rec['level']}")
+            scope = str(radius.get("scope", "")).strip()
+            if not scope:
+                err("blast_radius requires a 'scope': how far one failure "
+                    "reaches (rack, hall, campus-ring). It is not called "
+                    "failure_domain because the record already carries "
+                    "fault_domain for the kind of fault, and two fields a "
+                    "letter apart is how the wrong one gets filled in")
+            tails = [f for f in TAIL_FIELDS if f in radius]
+            means = [f for f in MEAN_FIELDS if f in radius]
+            if not tails:
+                if means:
+                    err(f"blast_radius states only {', '.join(means)}: average "
+                        f"link utilisation is how operators get surprised. Give "
+                        f"a tail figure (one of {', '.join(TAIL_FIELDS)}) as "
+                        f"well; the mean may stay alongside it")
+                else:
+                    err(f"blast_radius requires a tail figure (one of "
+                        f"{', '.join(TAIL_FIELDS)}): the tail and the scope are "
+                        f"the fields the decision turns on")
 
     # irreversible domains capped at L1
     fault_domain = str(rec.get("fault_domain", "")).lower()

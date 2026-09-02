@@ -1,0 +1,25 @@
+# Moving a job to make room drains whoever was in the way. It spends other
+# tenants' compute, so it is L0 whatever the slice is worth and however green
+# the experiment was.
+action: move-job
+domain: span
+fault_domain: inter-hall-circuit
+level: L0
+region: campus-east / hall-a -> hall-c / tenant-research
+certified_by:
+  - metro-cut-inject
+evidence:
+  - runs/move-job/drain-list.json
+  - runs/move-job/victims.json
+blast_radius:
+  halls: 2                 # the move lands the job on a second hall
+  jobs: 4                  # three neighbours drained to make the rectangle
+  scope: campus-ring
+  p99_rtt_ms: 11.0
+  mean_rtt_ms: 2.1         # the mean is the number that would have said yes
+proposed_by: planner-agent
+reviewer: fabric-oncall
+notes: >-
+  Two reasons this cannot rise, and either alone is enough: the action crosses
+  a tenant boundary, and the span reaches two halls. The mean RTT here looks
+  survivable and is exactly the field that would have waved it through.

@@ -6,5 +6,6 @@ region: cluster-a / production
 certified_by: []
 evidence:
   - runs/ib-flap/plan.txt
+proposed_by: detector-agent
 reviewer: fabric-oncall
 notes: "real fabric fault is irreversible-in-effect; stays human-authorized."

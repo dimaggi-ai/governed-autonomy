@@ -23,7 +23,7 @@ Keep them separate so a planner cannot edit policy by talking well.
 | Healer | an allow-listed plan | novel commands |
 | Referee | approve / rewrite / deny + the log | skipping the log |
 
-**If one process can both propose and approve a drain, you have no control plane.** The referee is a runtime policy firewall — DIMAGGI's [Tool Guard](https://dimaggi.ai) is exactly this class of component: it intercepts each tool call *before execution* and applies allow / deny / redact / escalate against declared policy, with a tamper-evident audit trail. This is the same enforcement the chaos standard names for the observation plane (agents *reading* `sacct`), extended to actuation (agents *operating* the cluster and the network).
+**If one process can both propose and approve a drain, you have no control plane.** Every promotion record names `proposed_by` as well as `reviewer`, and the gate refuses the record when they are the same identity — the claim is checked, not asserted. The referee is a runtime policy firewall — DIMAGGI's [Tool Guard](https://dimaggi.ai) is exactly this class of component: it intercepts each tool call *before execution* and applies allow / deny / redact / escalate against declared policy, with a tamper-evident audit trail. This is the same enforcement the chaos standard names for the observation plane (agents *reading* `sacct`), extended to actuation (agents *operating* the cluster and the network).
 
 ## One cycle
 
@@ -44,6 +44,10 @@ An action class is promoted only on evidence, and the evidence is a green chaos 
 | **L4** | auto in one declared pool | full domain suite + rollback drill + control-plane-dark drill |
 
 L4 is a pool, not the company. The region is written on the promotion record: cluster, tenant, action, level, evidence paths.
+
+### Actions that span halls have a ceiling instead
+
+A job that crosses halls is governed by one extra rule: for the span action set, the binding constraint is not how well the behaviour is understood but **whose work the action spends**. Requesting a circuit, cordoning a slice and delaying a checkpoint touch only the job that asked, and cap at L1. Draining, moving, resharding and reconstituting cross a tenant boundary, and are L0 whatever the slice is worth — the ceiling is a property of the action, so no experiment lifts it. Retuning a circuit under a live collective has no level at all. Every span record also carries a blast radius, stated as a tail rather than a mean, and a span that can black-hole two halls is L0 however good the latency looks. The table and the reasoning: [docs/span-actions.md](span-actions.md).
 
 ## Why this is one architecture for two domains
 

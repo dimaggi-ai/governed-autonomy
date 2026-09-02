@@ -20,7 +20,9 @@ Five planes kept separate so a planner cannot edit policy by talking well (inten
 
 ## The machine-checkable artifact: the promotion gate
 
-Consistent with the standard's "fail the PR, not the prose" ethos, [`gate/`](gate/) refuses an autonomy-promotion record that claims a level it has not earned: L2+ must cite a certifying chaos experiment, carry evidence, and hold its abort; L4 needs a control-plane-dark drill and a rollback drill in one declared pool; irreversible fault domains (production training fabric, power interlocks) are capped at L1.
+Consistent with the standard's "fail the PR, not the prose" ethos, [`gate/`](gate/) refuses an autonomy-promotion record that claims a level it has not earned: L2+ must cite a certifying chaos experiment, carry evidence, and hold its abort; L4 needs a control-plane-dark drill and a rollback drill in one declared pool; irreversible fault domains (production training fabric, power interlocks) are capped at L1; and every record names who proposed the action as well as who approved it, because a record where those are one identity is not a control plane.
+
+Actions that **span halls** are governed by a ceiling rather than by evidence, because what caps them is whose compute they spend: requesting a circuit or cordoning your own slice reaches L1, draining or moving a neighbour is L0 however green the experiment, and retuning a circuit under a live collective has no level at all. Every span record states its blast radius as a tail rather than a mean — average link utilisation is how operators get surprised — and a span that can black-hole two halls goes to a person whatever the latency looks like. See [docs/span-actions.md](docs/span-actions.md).
 
 ```
 pip install pyyaml matplotlib

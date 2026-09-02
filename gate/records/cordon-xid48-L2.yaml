@@ -11,5 +11,6 @@ evidence:
   - runs/xid48/abort-log.txt
 abort_never_missed: true
 reversible: true
-reviewer: platform-oncall
+proposed_by: healer-agent      # Actuate proposed it
+reviewer: platform-oncall     # Guard approved it
 notes: "known-fatal-GPU cordon; green over 12 runs, abort never missed."
