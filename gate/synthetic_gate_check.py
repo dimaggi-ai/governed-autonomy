@@ -54,8 +54,9 @@ SAFE_FAULT_DOMAINS = ("inference-pool", "staging-fabric", "canary-cell",
                       "decode-tier", "test-rack")
 REVIEWERS = ("m.nanyonga", "j.okello", "a.namutebi", "site-lead-2")
 POOLS = ("pool-a", "pool-b", "inference-pool-eu", "decode-pool-3")
+PROPOSERS = ("actuate-planner", "heal-pipeline", "capacity-agent")
 REQUIRED_FIELDS = ("action", "domain", "level", "region", "fault_domain",
-                   "evidence", "reviewer")
+                   "evidence", "reviewer", "proposed_by")
 
 # The mutated record is submitted under this name so that no mutation's
 # own label can satisfy the substring it is supposed to prove.
@@ -72,6 +73,8 @@ def synth_valid(level: str, rng: random.Random) -> dict:
         "fault_domain": rng.choice(SAFE_FAULT_DOMAINS),
         "evidence": [f"evidence/{rng.randrange(10**6)}.log"],
         "reviewer": rng.choice(REVIEWERS),
+        # the plane split: the proposer is never the reviewer
+        "proposed_by": rng.choice(PROPOSERS),
     }
     lvl = int(level[1])
     if lvl >= 2:
