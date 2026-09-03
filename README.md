@@ -24,6 +24,8 @@ Consistent with the standard's "fail the PR, not the prose" ethos, [`gate/`](gat
 
 Actions that **span halls** are governed by a ceiling rather than by evidence, because what caps them is whose compute they spend: requesting a circuit or cordoning your own slice reaches L1, draining or moving a neighbour is L0 however green the experiment, and retuning a circuit under a live collective has no level at all. Every span record states its blast radius as a tail rather than a mean — average link utilisation is how operators get surprised — and a span that can black-hole two halls goes to a person whatever the latency looks like. See [docs/span-actions.md](docs/span-actions.md).
 
+Organization-level slice quotas and wavelength-sharing bans are admission refusals rather than autonomy levels, so they live in [span-contract 1.1.0](https://github.com/dimaggi-ai/span-contract)'s four tenant predicates (TN1–TN4), not in this gate's schema.
+
 ```
 pip install pyyaml matplotlib
 make test        # gate validator + rejection tests + both validation halves
