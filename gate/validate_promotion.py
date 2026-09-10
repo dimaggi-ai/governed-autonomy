@@ -81,12 +81,14 @@ MEAN_FIELDS = ("mean_rtt_ms", "avg_rtt_ms", "average_rtt_ms",
                "mean_link_utilization", "avg_link_utilization")
 
 
-def validate(rec: dict, name: str) -> list[str]:
+def validate_structure(rec: dict, name: str, *, legacy_evidence_names=True) -> list[str]:
     errs: list[str] = []
 
     def err(m):
         errs.append(f"  {name}: {m}")
 
+    if not isinstance(rec, dict):
+        return [f"{name}: promotion must be a mapping"]
     for f in REQUIRED:
         if f not in rec or rec[f] in (None, "", []):
             err(f"missing required field '{f}'")
@@ -141,7 +143,7 @@ def validate(rec: dict, name: str) -> list[str]:
     # strictly above L2's staged evidence. Note `lvl >= 3`, not `== "L3"`: the
     # ladder must be monotone, so L4 inherits every L3 requirement. (It did
     # not before, which made L4 cheaper to claim than L3.)
-    if lvl >= 3:
+    if lvl >= 3 and legacy_evidence_names:
         joined3 = " ".join(str(x) for x in list(certs) + list(evidence)).lower()
         if "canary" not in joined3:
             err(f"{rec['level']} requires a live-traffic quality canary "
@@ -151,7 +153,7 @@ def validate(rec: dict, name: str) -> list[str]:
                 f"(the L3 bar) in certified_by/evidence")
 
     # L4: hardest drills + single pool, on top of everything L3 requires
-    if lvl >= 4:
+    if lvl >= 4 and legacy_evidence_names:
         joined = " ".join(str(x) for x in list(certs) + list(evidence)).lower()
         if "control-plane-dark" not in joined and "planner-dark" not in joined:
             err("L4 requires a control-plane-dark drill in certified_by/evidence")
@@ -221,6 +223,23 @@ def validate(rec: dict, name: str) -> list[str]:
     return errs
 
 
+def validate(rec: dict, name: str, *, evidence_root=None, trust=None) -> list[str]:
+    """Full promotion gate; structural examples alone cannot earn L2+."""
+    errs = validate_structure(rec, name, legacy_evidence_names=False)
+    if isinstance(rec, dict) and rec.get('level') == 'L4' and not re.search(r'pool', str(rec.get('region','')).lower()):
+        errs.append(f'{name}: L4 requires a single declared pool')
+    if isinstance(rec, dict) and rec.get('level') in ('L2', 'L3', 'L4'):
+        if evidence_root is None or not trust:
+            errs.append(f'{name}: explicit evidence root and trusted-runner policy required at L2+')
+        elif not errs:
+            try:
+                from .evidence import verify_receipts
+            except ImportError:
+                from evidence import verify_receipts
+            errs.extend(verify_receipts(rec, evidence_root, trust))
+    return errs
+
+
 def _collect(args: list[str]) -> list:
     here = Path(__file__).resolve().parent
     raw = [Path(a) for a in args] if args else [here / "records"]
@@ -235,12 +254,25 @@ def main(argv: list[str]) -> int:
         print(
             "promotion-gate — check autonomy-promotion records against the L0-L4 gate.\n\n"
             "Usage:\n"
-            "  promotion-gate [RECORD.yaml | DIR ...]\n\n"
-            "With no arguments, validates the bundled reference records.\n"
+            "  promotion-gate [--trust POLICY.json --evidence-root DIR] [RECORD.yaml | DIR ...]\n\n"
+            "L2+ requires authenticated receipts bound to implementation_sha256.\n"
+            "Bundled declaration-only examples deliberately fail full L2+ promotion.\n"
             "Exit status: 0 if all records pass the gate, 1 otherwise."
         )
         return 0
-    paths = _collect(argv[1:])
+    import argparse
+    import json
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--trust', type=Path, help='Out-of-band trusted-runner policy JSON')
+    parser.add_argument('--evidence-root', type=Path)
+    parser.add_argument('records', nargs='*')
+    args = parser.parse_args(argv[1:])
+    try:
+        trust = json.loads(args.trust.read_text()) if args.trust else None
+    except (OSError, ValueError) as exc:
+        print(f'FAIL trust policy: {exc}')
+        return 1
+    paths = _collect(args.records)
     if not paths:
         print("no promotion records found (pass a .yaml record or a directory)")
         return 1
@@ -252,7 +284,7 @@ def main(argv: list[str]) -> int:
             print(f"FAIL {p.name}")
             all_errs.append(f"  {p.name}: unreadable ({e})")
             continue
-        e = validate(rec, p.name)
+        e = validate(rec, p.name, evidence_root=args.evidence_root, trust=trust)
         print(f"{'FAIL' if e else 'ok  '} {p.name}")
         all_errs.extend(e)
     if all_errs:

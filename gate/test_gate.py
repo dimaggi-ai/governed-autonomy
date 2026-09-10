@@ -1,11 +1,11 @@
-"""Promotion-gate tests: valid records pass; unearned promotions fail.
+"""Declaration-linter tests only; full receipt authentication is in test_evidence.py.
 Run: python3 test_gate.py"""
 from pathlib import Path
 import yaml
 try:
-    from .validate_promotion import validate
+    from .validate_promotion import validate_structure as validate
 except ImportError:                      # run as a script from gate/
-    from validate_promotion import validate
+    from validate_promotion import validate_structure as validate
 
 GOOD_L2 = {
     "action": "cordon-on-xid-48", "domain": "cluster", "fault_domain": "accelerator",

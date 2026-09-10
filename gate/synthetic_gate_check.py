@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthetic-data validation of the promotion gate.
+"""Synthetic declaration-linter checks, NOT authenticated promotion evidence.
 
 The gate's five bundled records are hand-written examples; a validator
 proven only on its own examples proves nothing. This harness generates
@@ -40,9 +40,9 @@ import random
 import sys
 
 try:
-    from .validate_promotion import CAPPED_L1, MACHINE_IDENTITIES, validate
+    from .validate_promotion import CAPPED_L1, MACHINE_IDENTITIES, validate_structure as validate
 except ImportError:                      # run as a script from gate/
-    from validate_promotion import CAPPED_L1, MACHINE_IDENTITIES, validate
+    from validate_promotion import CAPPED_L1, MACHINE_IDENTITIES, validate_structure as validate
 
 SEED = 0
 N_PER_LEVEL = 20
@@ -209,7 +209,8 @@ def run() -> tuple[int, int, list[str]]:
 def main() -> int:
     accepted, rejected, problems = run()
     total_valid = 5 * N_PER_LEVEL + 2
-    print(f"synthetic valid records accepted:  {accepted}/{total_valid}")
+    print("DECLARATION-ONLY CHECKS: authenticated promotion is tested separately in test_evidence.py")
+    print(f"synthetic valid declarations accepted:  {accepted}/{total_valid}")
     print(f"synthetic mutations rejected:      {rejected}/{len(MUTATIONS)} "
           f"(each for its own rule's stated reason, matched against the "
           f"message with the record name stripped)")
@@ -218,7 +219,7 @@ def main() -> int:
         for p in problems:
             print(f"  - {p}")
         return 1
-    print("\nthe gate holds: every synthetic valid record passes, every "
+    print("\nthe declaration linter holds: every synthetic valid record passes, every "
           "single-rule violation is refused with its rule's reason")
     return 0
 

@@ -1,0 +1,417 @@
+{
+  "schema_version": "dimaggi-evidence/v1",
+  "coverage_scope": "Consequential headline claims, governing assumptions and model limits. Not a catalog of helper constants or proof that citations are correct.",
+  "sources": {
+    "gate/evidence.py": {
+      "source_type": "model-assumption",
+      "location": "gate/evidence.py",
+      "version_date": "2026-09-10 closure working tree; SHA-256 bound below",
+      "license_or_reuse": "Repository-authored analysis; third-party facts referenced, no new external raw data redistributed",
+      "scope": "Local authoritative definition or claim. External provenance retained in SOURCES/REFERENCES and inline citations; scenario choices are not empirical measurements."
+    },
+    "gate/test_evidence.py": {
+      "source_type": "model-assumption",
+      "location": "gate/test_evidence.py",
+      "version_date": "2026-09-10 closure working tree; SHA-256 bound below",
+      "license_or_reuse": "Repository-authored analysis; third-party facts referenced, no new external raw data redistributed",
+      "scope": "Local authoritative definition or claim. External provenance retained in SOURCES/REFERENCES and inline citations; scenario choices are not empirical measurements."
+    },
+    "exhibit/latency_ladder.json": {
+      "source_type": "model-assumption",
+      "location": "exhibit/latency_ladder.json",
+      "version_date": "2026-09-10 closure working tree; SHA-256 bound below",
+      "license_or_reuse": "Repository-authored analysis; third-party facts referenced, no new external raw data redistributed",
+      "scope": "Local authoritative definition or claim. External provenance retained in SOURCES/REFERENCES and inline citations; scenario choices are not empirical measurements."
+    },
+    "REFERENCES.md": {
+      "source_type": "model-assumption",
+      "location": "REFERENCES.md",
+      "version_date": "2026-09-10 closure working tree; SHA-256 bound below",
+      "license_or_reuse": "Repository-authored analysis; third-party facts referenced, no new external raw data redistributed",
+      "scope": "Local authoritative definition or claim. External provenance retained in SOURCES/REFERENCES and inline citations; scenario choices are not empirical measurements."
+    },
+    "README.md": {
+      "source_type": "model-assumption",
+      "location": "README.md",
+      "version_date": "2026-09-10 closure working tree; SHA-256 bound below",
+      "license_or_reuse": "Repository-authored analysis; third-party facts referenced, no new external raw data redistributed",
+      "scope": "Local authoritative definition or claim. External provenance retained in SOURCES/REFERENCES and inline citations; scenario choices are not empirical measurements."
+    }
+  },
+  "inputs": [
+    {
+      "name": "Clock sync (White Rabbit / PTP-HA)",
+      "value": 1e-10,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [1]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Switch ASIC cut-through forwarding",
+      "value": 1e-7,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [2]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Per-packet adaptive routing / P4 match-action",
+      "value": 1e-7,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [3]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Inline FEC (RS-544 'KP4')",
+      "value": 1.5e-7,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [4]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "PFC pause loop",
+      "value": 0.000005,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [5]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Self-healing link reroute (IB SHIELD)",
+      "value": 0.0005,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [3]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "BFD detection floor (3.3 ms x3)",
+      "value": 0.01,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [6]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Real-time RAN loop (O-DU/O-RU)",
+      "value": 0.008,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [7]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1
+      ]
+    },
+    {
+      "name": "Near-RT RIC xApps",
+      "value": 0.3,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [7]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        30
+      ]
+    },
+    {
+      "name": "OCS hardware switch (MEMS)",
+      "value": 0.015,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [9]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1.5
+      ]
+    },
+    {
+      "name": "IP FRR / TI-LFA / optical APS (<50 ms)",
+      "value": 0.04,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [10]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        4
+      ]
+    },
+    {
+      "name": "IGP convergence (tuned)",
+      "value": 0.5,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [11]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        50
+      ]
+    },
+    {
+      "name": "Non-RT RIC rApps",
+      "value": 10,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [7]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1000
+      ]
+    },
+    {
+      "name": "gNMI telemetry (practice)",
+      "value": 10,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [12]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        1000
+      ]
+    },
+    {
+      "name": "BGP convergence (node failure)",
+      "value": 300,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [11]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        30000
+      ]
+    },
+    {
+      "name": "LLM planner deliberation",
+      "value": 60,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [13]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        6000
+      ]
+    },
+    {
+      "name": "TMF intent / assurance loop",
+      "value": 300,
+      "unit": "seconds",
+      "evidence_class": "scenario",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Representative exhibit value within referenced bounds (REFERENCES.md [14]); not a DIMAGGI hardware measurement",
+      "uncertainty": "Planning/reference model input; not independently measured here",
+      "affected_outputs": [
+        "published comparisons"
+      ],
+      "valid_bounds": [
+        0,
+        30000
+      ]
+    },
+    {
+      "name": "authorized predicate policy",
+      "unit": "policy",
+      "statement": "Verifier supplies deadline, canary regression/sample, GPU-second budget and dark-duration limits; absent required limits refuse evidence",
+      "evidence_class": "scenario",
+      "sources": [
+        "gate/evidence.py"
+      ],
+      "transformation": "Per-predicate trial bounds evaluated against out-of-band trust policy",
+      "uncertainty": "Operator-selected limits, not universal safe settings",
+      "affected_outputs": [
+        "promotion"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "name": "promotion predicates",
+      "unit": "claim",
+      "evidence_class": "sanity-bound",
+      "sources": [
+        "gate/evidence.py"
+      ],
+      "transformation": "Signature, digests, experiment metadata and predicate-specific trial observations must agree; runner honesty remains a trust assumption",
+      "uncertainty": "Scope and qualifications stated in transformation and linked source; no unreported confidence interval",
+      "affected_outputs": [
+        "published conclusion",
+        "README.md"
+      ],
+      "statement": "Signature, digests, experiment metadata and predicate-specific trial observations must agree; runner honesty remains a trust assumption"
+    },
+    {
+      "name": "latency exhibit",
+      "unit": "claim",
+      "evidence_class": "derived",
+      "sources": [
+        "exhibit/latency_ladder.json"
+      ],
+      "transformation": "Reference/example latency bands do not measure end-to-end autonomous control latency or certify device behavior",
+      "uncertainty": "Scope and qualifications stated in transformation and linked source; no unreported confidence interval",
+      "affected_outputs": [
+        "published conclusion",
+        "README.md"
+      ],
+      "statement": "Reference/example latency bands do not measure end-to-end autonomous control latency or certify device behavior"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "gate/evidence.py",
+      "sha256": "f4d5212b8ea7b6da6e723310d719288903f55888b1e8d42412fff317924ea224"
+    },
+    {
+      "path": "gate/test_evidence.py",
+      "sha256": "11b6cf823415800d2bf19f7d985e4e605fb04ef064fc995b8e6920854b213502"
+    },
+    {
+      "path": "exhibit/latency_ladder.json",
+      "sha256": "aa0a4cda30ef82da13bbabe9626df21a72c6fb9c1f58bb52c30370558bb744d7"
+    },
+    {
+      "path": "REFERENCES.md",
+      "sha256": "a65f1254233de523a586d8f3760505c1036317971a5d8622eab7777a8dc1a65c"
+    },
+    {
+      "path": "README.md",
+      "sha256": "2f35f3fc4ab01a316dbb7e473e219a658369067269193a08518673e686f313c2"
+    }
+  ]
+}
