@@ -9,9 +9,10 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pyyaml matplotlib
-      - name: Promotion-gate validator + tests
+      - name: Declaration lint and authenticated promotion evidence tests
         run: |
-          cd gate && python3 validate_promotion.py && python3 test_gate.py
+          python3 gate/test_gate.py
+          python3 -m unittest gate.test_evidence -v
       # The JSON is the exhibit's data file and IS byte-reproducible, so an
       # edit to it that was never regenerated fails here. The PNG is not:
       # matplotlib/freetype render text differently across builds, so its
