@@ -1,0 +1,18 @@
+[
+  {
+    "repo": "governed-autonomy",
+    "label": "AI INFRASTRUCTURE RESEARCH",
+    "title": [
+      "Who authorizes",
+      "autonomous action?"
+    ],
+    "subtitle": [
+      "Control-plane architecture and",
+      "an evidence-based promotion gate."
+    ],
+    "fontSize": 58,
+    "background": "illustration-v2.png",
+    "output": ".",
+    "source_readme_commit": "fe3854b340c755c90aa16efe5384749d7239d680"
+  }
+]
