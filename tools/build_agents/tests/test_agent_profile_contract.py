@@ -171,6 +171,71 @@ class ProfileContractTests(unittest.TestCase):
         self.doc['network_coverage'][0]['claims'][0]['value'] = 10 ** 400
         self.assertRejected('missing/invalid network-SLO input')
 
+    def rewrite_source(self, transform):
+        row = self.doc['evidence'][0]
+        payload = json.loads(row['payload'])
+        transform(payload)
+        row['payload'] = json.dumps(payload)
+        row['sha256'] = hashlib.sha256(row['payload'].encode()).hexdigest()
+
+    def test_boolean_source_fact_cannot_back_numeric_claim_and_can_recover(self):
+        original = copy.deepcopy(self.doc)
+        for prop, replacement in (('rtt_ms', True), ('loss_fraction', False)):
+            with self.subTest(property=prop):
+                self.doc = copy.deepcopy(original)
+                def change(payload):
+                    item = next(f for f in payload['facts']
+                                if f['subject'] == 'chip' and f['property'] == prop)
+                    item['value'] = replacement
+                self.rewrite_source(change)
+                self.assertRejected('invalid source fact')
+                self.assertRejected('fact not bound to source payload')
+                def repair(payload):
+                    item = next(f for f in payload['facts']
+                                if f['subject'] == 'chip' and f['property'] == prop)
+                    item['value'] = 1 if prop == 'rtt_ms' else 0
+                self.rewrite_source(repair)
+                self.assertEqual(self.errors(), [])
+
+    def test_invalid_unreferenced_source_facts_refused(self):
+        original = copy.deepcopy(self.doc)
+        for field, value in (('subject', ''), ('property', ' '), ('unit', None),
+                             ('value', True), ('value', False), ('value', '1'),
+                             ('value', -1), ('value', 10 ** 400)):
+            with self.subTest(field=field, value=value):
+                self.doc = copy.deepcopy(original)
+                item = dict(subject='unused', property='capacity', value=1, unit='units')
+                item[field] = value
+                self.rewrite_source(lambda payload: payload['facts'].append(item))
+                self.assertRejected('invalid source fact')
+
+    def test_finite_integral_float_source_fact_remains_numeric(self):
+        self.rewrite_source(lambda payload: [f.update(value=float(f['value']))
+                                            for f in payload['facts']])
+        self.assertEqual(self.errors(), [])
+
+    def test_measured_config_boolean_cannot_impersonate_numeric_concurrency(self):
+        row = self.doc['evidence'][0]
+        row['kind'] = 'measured'
+        row['run'] = {'id': 'synthetic-regression-run',
+                      'config': copy.deepcopy(self.doc['profiles'][0]['config'])}
+        self.doc['profiles'][0]['claims'][0]['kind'] = 'measured'
+        row['run']['config']['concurrency'] = True
+        self.assertRejected('profile-a: measured fact lacks exact matching configuration')
+        row['run']['config']['concurrency'] = 1
+        self.assertFalse(any('profile-a: measured fact lacks exact matching configuration'
+                             in e for e in self.errors()))
+
+    def test_numeric_portability_qualification_is_not_boolean(self):
+        row = copy.deepcopy(self.doc['evidence'][0])
+        row['id'] = 'unreferenced-portability'
+        row['payload'] = json.dumps({'portability': {
+            'from': 'profile-a', 'to': 'target', 'qualified': 1,
+            'from_config': {}, 'to_config': {}}})
+        row['sha256'] = hashlib.sha256(row['payload'].encode()).hexdigest()
+        self.doc['evidence'].append(row)
+        self.assertRejected('portability qualified must be a boolean')
+
     def test_no_execution_authority(self):
         self.doc['execution_authority'] = True
         self.assertRejected('execution_authority must be false')

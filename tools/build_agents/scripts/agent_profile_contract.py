@@ -45,6 +45,24 @@ def _number(value, minimum=0, maximum=None):
         return False
 
 
+def _same_value(left, right):
+    """JSON equality that never treats booleans as numbers; 1 and 1.0 agree."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(_same_value(left[k], right[k]) for k in left)
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(_same_value(a, b) for a, b in zip(left, right))
+    return left == right
+
+
+def _valid_fact(item):
+    return (isinstance(item, dict)
+            and all(isinstance(item.get(k), str) and item[k].strip()
+                    for k in ('subject', 'property', 'unit'))
+            and _number(item.get('value')))
+
+
 def _date(value):
     if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
         return None
@@ -158,7 +176,10 @@ def validate(document, *, as_of):
                     errors.append('reference payload must be reference_only')
             elif 'portability' in parsed_payload:
                 shape(parsed_payload, {'portability'}, label='portability payload')
-                shape(parsed_payload['portability'], {'from', 'to', 'qualified', 'from_config', 'to_config'}, label='portability assertion')
+                assertion = parsed_payload['portability']
+                shape(assertion, {'from', 'to', 'qualified', 'from_config', 'to_config'}, label='portability assertion')
+                if not isinstance(assertion, dict) or type(assertion.get('qualified')) is not bool:
+                    errors.append('portability qualified must be a boolean')
             else:
                 shape(parsed_payload, {'facts'}, label='facts payload')
                 facts = parsed_payload.get('facts')
@@ -167,6 +188,8 @@ def validate(document, *, as_of):
                 else:
                     for item in facts:
                         shape(item, {'subject', 'property', 'value', 'unit'}, label='source fact')
+                        if not _valid_fact(item):
+                            errors.append(f'{eid}: invalid source fact subject/property/value/unit')
         if kind == 'measured':
             run = row.get('run')
             shape(run, {'id', 'config'}, label='measured run')
@@ -195,11 +218,12 @@ def validate(document, *, as_of):
             facts = []
         expected = {key: claim.get(key) for key in ('property', 'value', 'unit')}
         expected['subject'] = subject
-        if not isinstance(facts, list) or expected not in facts:
+        if not isinstance(facts, list) or not any(
+                _valid_fact(item) and _same_value(expected, item) for item in facts):
             errors.append(f'{subject}: fact not bound to source payload')
         if kind == 'measured':
             run = row.get('run')
-            if config is None or not isinstance(run, dict) or run.get('config') != config:
+            if config is None or not isinstance(run, dict) or not _same_value(run.get('config'), config):
                 errors.append(f'{subject}: measured fact lacks exact matching configuration')
 
     for row in rows('profiles'):
@@ -260,8 +284,8 @@ def validate(document, *, as_of):
                 payload = {}
             expected = {'from': left, 'to': right, 'qualified': True, 'from_config': a, 'to_config': b}
             run = proof.get('run') if proof else None
-            if (not proof or proof.get('kind') != 'measured' or not isinstance(payload, dict) or payload.get('portability') != expected
-                    or not isinstance(run, dict) or run.get('config') != {'from': a, 'to': b}):
+            if (not proof or proof.get('kind') != 'measured' or not isinstance(payload, dict) or not _same_value(payload.get('portability'), expected)
+                    or not isinstance(run, dict) or not _same_value(run.get('config'), {'from': a, 'to': b})):
                 errors.append('hardware/vendor/runtime portability requires exact measured qualification evidence')
 
     covered = set()

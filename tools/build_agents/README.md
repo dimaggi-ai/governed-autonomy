@@ -121,3 +121,38 @@ python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.jso
 The generator creates seven `.codex/agents/*.toml` and seven `.claude/agents/*.md` files. Start a fresh harness session to discover new definitions. Installation changes no sandbox, approval setting or credential. Existing different definitions require a reviewed migration preserving the previous manifest and files.
 
 Runtime compatibility: on Codex CLI 0.160.0 in the inspected installation, named custom-role selection was not exposed even though the TOML files parsed. Explicit generic-subagent delegation with the reviewed role instructions was verified. If named selection is unavailable, the parent must read the generated role, pass its instructions to one scoped generic subagent, and label that fallback honestly; never silently emulate a delegated review. The child inherits the parent sandbox. Native named discovery must be rechecked after runtime upgrades.
+
+
+## Review, permission prompts and daily receipts
+
+Review waiting is a normal state. Continue independent authorized work while the
+reviewed candidate stays pinned. The assurance role remains read-only and has no
+shell access: the coordinator assigns a separately authorized runner from the
+other tool than the implementer to reproduce proposed checks in an isolated checkout, then returns the
+SHA, commands and results to the reviewer. Same-tool checks are supplementary;
+neither runner nor reviewer grants human acceptance.
+
+Never approve another agent's permission/access prompt. Declining and logging a
+blocked action is allowed; required access follows the existing human decision
+route. Do not weaken controls to remove an interruption. Substantive uncertainty
+or cross-tool disagreement can use the user-authorized model panel within existing
+access, with conclusions checked against evidence rather than a model vote.
+
+The existing report remains the detailed reporting channel. An explicitly
+requested daily chat receipt is a table of at most five rows showing builds,
+evidence and remaining gates; it creates no second detailed report or schedule.
+Test success, refusal and corrected-recovery journeys. Where visuals help, verify
+legibility, spelling, units and claims and reuse the approved logo when appropriate.
+
+Source facts reject boolean measurement values even when Python would equate
+`true` with `1`. Ordinary finite numeric `1` and `1.0` remain equivalent; source
+identity/property/unit strings must be nonempty. This is evidence consistency,
+not source authentication or a hardware qualification claim.
+
+Post-run write authorization uses exact Git path spelling, preserving case and
+Unicode codepoints. Conservative case/Unicode alias folding is used only to
+prevent overlapping claims, never to grant a broader write scope. On an
+insensitive filesystem, an alias spelling may therefore be refused even when it
+refers to the same file: reconcile the packet with the Git-reported spelling
+rather than infer authority from filesystem equivalence. This remains post-run
+detection, not filesystem containment.

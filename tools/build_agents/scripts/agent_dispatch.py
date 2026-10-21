@@ -57,14 +57,20 @@ def load_json(path):
     return json.loads(Path(path).read_text(), object_pairs_hook=unique_object)
 
 
-def canonical_scope(value):
+def lexical_scope(value):
+    """Validate a relative Git path while preserving case and Unicode spelling."""
     require(isinstance(value, str) and 0 < len(value) <= 512, 'invalid scope')
     require(not any(ord(c) < 32 for c in value) and '\\' not in value and ':' not in value,
             'invalid scope characters')
     p = PurePosixPath(value)
     require(not p.is_absolute() and '..' not in p.parts, 'scope traversal')
     require(not p.parts or p.parts[0].casefold() != '.git', 'Git metadata is not a work scope')
-    return unicodedata.normalize('NFC', p.as_posix()).casefold()
+    return p.as_posix()
+
+
+def canonical_scope(value):
+    """Conservative alias key for conflicts, never write authorization."""
+    return unicodedata.normalize('NFC', lexical_scope(value)).casefold()
 
 
 def overlaps(left, right):
@@ -393,7 +399,8 @@ def execute(packet, allow_repositories, tracker_repository, root, checkout):
             receipt['unclassifiable_paths'] = []
             for changed in changes:
                 try:
-                    contained = within_scope(canonical_scope(changed), prepared['scopes'])
+                    contained = within_scope(lexical_scope(changed),
+                                             [lexical_scope(p) for p in packet['paths']])
                 except Refusal:
                     # Agent-created names are evidence, not packet validation input.
                     # Retain every unclassifiable path and fail the run conservatively.

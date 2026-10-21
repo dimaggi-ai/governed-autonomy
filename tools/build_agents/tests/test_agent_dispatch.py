@@ -211,6 +211,32 @@ class DispatchTests(unittest.TestCase):
                 with dispatch.scope_claim(self.root, 'example/service', ['cafe\u0301/file.py']):
                     pass
 
+    def test_case_and_unicode_aliases_do_not_expand_write_authorization(self):
+        # Git names can be distinct on a case-sensitive host. Mock only status
+        # discovery so every host exercises the actual receipt authorization.
+        variants = [('src/one.py', 'SRC/one.py'),
+                    ('src/Token.py', 'src/token.py'),
+                    ('src/caf\u00e9.py', 'src/cafe\u0301.py'),
+                    ('src/stra\u00dfe.py', 'src/strasse.py')]
+        for owned, changed in variants:
+            with self.subTest(owned=owned, changed=changed):
+                self.packet['paths'] = [owned]
+                self.refresh_execution()
+                with mock.patch.object(dispatch, 'changed_paths', return_value=[changed]):
+                    _, receipt = self.execute()
+                self.assertEqual(receipt['result'], 'failed')
+                self.assertEqual(receipt['outside_scope'], [changed])
+
+    def test_exact_git_spelling_succeeds_even_for_unicode_paths(self):
+        for owned in ('src/one.py', 'src/Token.py', 'src/caf\u00e9.py', 'src/cafe\u0301.py'):
+            with self.subTest(owned=owned):
+                self.packet['paths'] = [owned]
+                self.refresh_execution()
+                with mock.patch.object(dispatch, 'changed_paths', return_value=[owned]):
+                    _, receipt = self.execute()
+                self.assertEqual(receipt['result'], 'completed_pending_review')
+                self.assertEqual(receipt['outside_scope'], [])
+
     def test_claim_alias_overlap_and_disjoint_scopes(self):
         with dispatch.scope_claim(self.root, 'Example/Service', ['src']):
             for scope in ['SRC/one.py', './src/', '.']:
