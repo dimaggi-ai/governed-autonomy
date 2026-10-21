@@ -1,4 +1,5 @@
 import copy
+from decimal import localcontext, Inexact, Rounded, ROUND_UP, ROUND_DOWN
 import hashlib
 import json
 from pathlib import Path
@@ -24,6 +25,18 @@ class PublicSpecTests(unittest.TestCase):
         self.assertEqual(facts['accelerator_interconnect'], 'XGMI')
         self.assertFalse(facts['measured_performance'])
         self.assertFalse(facts['execution_authority'])
+
+    def test_memory_conversion_ignores_decimal_context(self):
+        for rounding in (ROUND_UP, ROUND_DOWN):
+            with localcontext() as context:
+                context.prec = 2
+                context.rounding = rounding
+                context.traps[Inexact] = True
+                context.traps[Rounded] = True
+                self.assertEqual(check(self.snapshot)['host_memory_bytes'], 2_473_901_162_496)
+                self.assertEqual(memory_bytes('256 GB'), 256_000_000_000)
+                with self.assertRaises(ValueError):
+                    memory_bytes('0.000001 GiB')
 
     def test_tamper_with_recomputed_hash_still_refused(self):
         self.snapshot['record_utf8'] = self.snapshot['record_utf8'].replace('256 GB', '512 GB')

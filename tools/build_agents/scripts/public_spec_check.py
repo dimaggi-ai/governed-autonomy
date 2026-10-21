@@ -8,7 +8,6 @@ is not usable workload capacity and establishes no SLO or portability claim.
 """
 import argparse
 import datetime as dt
-from decimal import Decimal
 import hashlib
 import json
 import re
@@ -32,10 +31,15 @@ def memory_bytes(text):
     match = re.fullmatch(r'([0-9]{1,6}(?:\.[0-9]{1,6})?)\s*(GB|GiB|TB|TiB)', text) if isinstance(text, str) else None
     if not match:
         raise ValueError('explicit supported memory units required')
-    value = Decimal(match[1]) * {'GB': 10**9, 'GiB': 2**30, 'TB': 10**12, 'TiB': 2**40}[match[2]]
-    if value <= 0 or value != value.to_integral_value():
+    # Integer rational arithmetic is independent of callers' Decimal contexts.
+    whole, dot, fraction = match[1].partition('.')
+    denominator = 10 ** len(fraction)
+    numerator = int(whole) * denominator + (int(fraction) if dot else 0)
+    multiplier = {'GB': 10**9, 'GiB': 2**30, 'TB': 10**12, 'TiB': 2**40}[match[2]]
+    value, remainder = divmod(numerator * multiplier, denominator)
+    if value <= 0 or remainder:
         raise ValueError('positive integral byte capacity required')
-    return int(value)
+    return value
 
 
 def extract(record):

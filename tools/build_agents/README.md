@@ -25,7 +25,7 @@ The fixture is authored synthetic evidence plus an official public reference, no
 
 An `agent-work-packet/v1` packet has exactly: `schema`, `issue_url`, `execution_block`, `tool`, `repository`, `base_sha`, `branch`, `paths`, `reviewer`, `timebox_seconds`, `max_output_bytes`, `task`.
 
-`tool` and `reviewer` are different members of `codex|claude-code`. The caller obtains a current authenticated issue snapshot; the adapter cannot authenticate a pasted JSON document. Keep the existing task metadata schema unchanged. The issue's plain-text Execution block contains these lines (the owned-path list uses compact JSON):
+`tool` and `reviewer` are different members of `codex|claude-code`. The caller obtains a current authenticated issue snapshot; the adapter cannot authenticate a pasted JSON document. Keep the existing task metadata schema unchanged. The issue's plain-text Execution block contains these lines (the owned-path list uses compact JSON and must match packet order exactly):
 
 ```text
 Execution:
@@ -39,7 +39,7 @@ Timebox seconds: 120
 Output budget bytes: 1048576
 ```
 
-Optional `Model`, `Session`, `Last checked`, `Handoff` lines are preserved as context, never authorization. `task` travels on stdin, never through shell interpolation. Repository identity, branch and HEAD must match and the checkout must be clean. The trusted root must contain the isolated checkout as a child. Plan example:
+Optional `Model`, `Session`, `Last checked`, `Handoff` lines are preserved as context, never authorization. `task` travels on stdin, never through shell interpolation. Repository identity, branch and HEAD must match and the checkout must be clean. Checkouts with submodule gitlinks are refused; use standalone checkouts. Git status disables executable clean/process filters for that invocation only, so filtered worktrees may be conservatively reported dirty. The trusted root must contain the isolated checkout as a child. Plan example:
 
 ```sh
 python3 tools/build_agents/scripts/agent_dispatch.py \
@@ -48,7 +48,7 @@ python3 tools/build_agents/scripts/agent_dispatch.py \
   --allow-repository example/project
 ```
 
-Add `--execute` only for the currently authorized task. Default CLI safeguards remain; the adapter sets no bypass flag. Missing permission is a blocked action, not a reason to weaken controls. The adapter's builder prompt excludes push/merge/deploy; delivery through an authorized branch/PR is the coordinator's separate, reviewed step. `completed_pending_review` means the process exited successfully and visible scope/identity checks passed, not that the task is correct, accepted or released.
+Add `--execute` only for the currently authorized task. Default CLI safeguards remain; the adapter sets no bypass flag. Missing permission is a blocked action, not a reason to weaken controls. Remote pushes are not checked by this local receipt; enforce remote-write permissions separately. The adapter's builder prompt excludes push/merge/deploy; delivery through an authorized branch/PR is the coordinator's separate, reviewed step. `completed_pending_review` means the process exited successfully and visible scope/identity checks passed, not that the task is correct, accepted or released.
 
 ## Security and operational limits
 
@@ -80,7 +80,7 @@ The existing report should summarize material changes, blockers and the next dec
 
 ## Infrastructure coverage and remaining product work
 
-The fixture covers chip, scale-up, scale-out, scale-in (drain/consolidation), campus, metro and long-haul inputs. Effective capacity still belongs to the existing network/scheduler/application models. Ordered, delivered, energized and qualified service capacity are distinct. Vendor-rated specifications do not establish measured SLOs or cross-vendor portability.
+The fixture field named `tier` is a coverage label: scale-in is an operation, not a physical network tier. The fixture covers chip, scale-up, scale-out, scale-in (drain/consolidation), campus, metro and long-haul inputs. Effective capacity still belongs to the existing network/scheduler/application models. Ordered, delivered, energized and qualified service capacity are distinct. Vendor-rated specifications do not establish measured SLOs or cross-vendor portability.
 
 Product evaluation must include workload compatibility, migration cost, TCO, residual/obsolescence assumptions, common supply shocks, geographic constraints and energized-shell readiness. Those calculations remain in their domain owners; this package validates evidence passed between them. A synthetic fixture validates the software contract, not performance on GPUs, TPUs or optical switches.
 
@@ -94,3 +94,28 @@ Product evaluation must include workload compatibility, migration cost, TCO, res
 - [W3C provenance](https://www.w3.org/TR/prov-overview/)
 
 These sources guide contracts and configuration. They are not evidence that this implementation is certified or operationally qualified.
+
+## Shared role definitions
+
+`config/roles.json` is the single source for both harnesses. Four core responsibilities and three on-demand lenses are reusable definitions, not seven continuously running agents.
+
+| Role | Responsibility |
+| --- | --- |
+| dimaggi-coordinator | Portfolio triage, one-writer assignment, evidence and decision follow-up; initial holder Codex |
+| dimaggi-builder | Implement an assigned bounded change; either harness |
+| dimaggi-assurance | Independently review the other harness's exact commit, security and reproducibility |
+| dimaggi-intelligence | Bounded source research and improvement proposals; initial holder Claude |
+| dimaggi-product | On-demand product architecture and vertical integration review |
+| dimaggi-infrastructure | On-demand compute, network, capacity, SLO and runtime review |
+| dimaggi-economics | On-demand demand, supply, TCO, portability and obsolescence review |
+
+Data governance, operations and security are mandatory cross-cutting responsibilities in the manifest, not duplicate permanent teams. Add a permanent specialist only when measured workload and ownership justify one.
+
+Install into an existing trusted workspace, then verify drift:
+
+```sh
+python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.json --destination /path/to/workspace
+python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.json --destination /path/to/workspace --check
+```
+
+The generator creates seven `.codex/agents/*.toml` and seven `.claude/agents/*.md` files. Start a fresh harness session to discover new definitions. Installation changes no sandbox, approval setting or credential. Existing different definitions require a reviewed migration preserving the previous manifest and files.

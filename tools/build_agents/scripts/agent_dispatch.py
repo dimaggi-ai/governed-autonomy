@@ -72,6 +72,11 @@ def overlaps(left, right):
                b.startswith(a + '/') for a in left for b in right)
 
 
+def within_scope(path, scopes):
+    """Write containment is directional; owning a child never owns its parent."""
+    return any(scope == '.' or path == scope or path.startswith(scope + '/') for scope in scopes)
+
+
 def validate_packet(packet, allow_repositories, tracker_repository):
     require(isinstance(packet, dict) and set(packet) == FIELDS, 'unknown or missing packet fields')
     require(packet['schema'] == SCHEMA, 'unknown packet schema')
@@ -117,15 +122,48 @@ def validate_packet(packet, allow_repositories, tracker_repository):
                 'Output budget bytes': str(packet['max_output_bytes'])}
     # Human context remains verbatim in the receipt; it is never dispatch authority.
     contextual_fields = {'Model', 'Session', 'Last checked', 'Handoff'}
+    require(actual.get('Owned paths') == expected['Owned paths'],
+            'Execution Owned paths must match packet JSON order and spelling exactly')
     require(set(actual) <= set(expected) | contextual_fields and
             {key: value for key, value in actual.items() if key not in contextual_fields} == expected,
             'Execution block does not match snapshot')
     return scopes
 
 
+def git_command(checkout, *args):
+    base = ['git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
+            '-c', 'core.hooksPath=/dev/null', '-C', str(checkout)]
+    if args and args[0] == 'status':
+        # Root status can recurse into initialized submodules and execute their
+        # separately configured filters. Inspect the index without touching file
+        # content, and refuse every gitlink (initialized or not) before status.
+        staged = subprocess.run(base + ['ls-files', '--stage', '-z'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        require(staged.returncode == 0, 'cannot inspect index for submodules')
+        require(not any(entry.startswith(b'160000 ') for entry in staged.stdout.split(b'\x00')),
+                'submodule gitlinks are unsupported for dispatch; use a standalone checkout')
+        # Status may execute clean/process filters while refreshing tracked files.
+        # Config inspection itself invokes no filters. Include effective system,
+        # global, local and conditional config, then override only for this read.
+        inspected = subprocess.run(base + ['config', '--includes', '--null', '--name-only',
+            '--get-regexp', r'^filter\..*\.(clean|process)$'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        require(inspected.returncode in (0, 1), 'cannot inspect content filter configuration')
+        disabled = set()
+        for key in inspected.stdout.decode().split('\x00'):
+            if not key:
+                continue
+            match = re.fullmatch(r'filter\.([A-Za-z0-9_.-]+)\.(clean|process)', key)
+            require(match is not None, 'unsupported content filter name; cannot safely disable')
+            disabled.add(match[1])
+        for driver in sorted(disabled):
+            base.extend(['-c', f'filter.{driver}.clean=', '-c', f'filter.{driver}.process=',
+                         '-c', f'filter.{driver}.required=false'])
+    return base + list(args)
+
+
 def git(checkout, *args):
-    result = subprocess.run(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
-                             '-c', 'core.hooksPath=/dev/null', '-C', str(checkout), *args],
+    result = subprocess.run(git_command(checkout, *args),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
     require(result.returncode == 0, 'checkout verification failed: ' + ' '.join(args[:2]))
     return result.stdout.decode().strip()
@@ -313,9 +351,8 @@ def bounded_process(argv, prompt, checkout, seconds, output_limit, output_path):
 
 
 def changed_paths(checkout):
-    result = subprocess.run(['git', '--no-optional-locks', '-c', 'core.fsmonitor=false',
-                             '-c', 'core.hooksPath=/dev/null', '-C', str(checkout),
-                             'status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    result = subprocess.run(git_command(checkout, 'status', '--porcelain=v1', '-z',
+                                         '--untracked-files=all'),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
     require(result.returncode == 0, 'post-run status failed')
     values = result.stdout.decode().split('\x00')
@@ -352,8 +389,18 @@ def execute(packet, allow_repositories, tracker_repository, root, checkout):
                 packet['timebox_seconds'], packet['max_output_bytes'], directory / 'output.log')
             changes = changed_paths(checkout)
             receipt['changed_paths'] = changes
-            receipt['outside_scope'] = [p for p in changes if not overlaps(
-                [canonical_scope(p)], prepared['scopes'])]
+            receipt['outside_scope'] = []
+            receipt['unclassifiable_paths'] = []
+            for changed in changes:
+                try:
+                    contained = within_scope(canonical_scope(changed), prepared['scopes'])
+                except Refusal:
+                    # Agent-created names are evidence, not packet validation input.
+                    # Retain every unclassifiable path and fail the run conservatively.
+                    receipt['unclassifiable_paths'].append(changed)
+                    contained = False
+                if not contained:
+                    receipt['outside_scope'].append(changed)
             receipt['symlink_changes'] = [p for p in changes if (checkout / p).is_symlink()]
             receipt['head_after'] = git(checkout, 'rev-parse', 'HEAD')
             receipt['branch_after'] = git(checkout, 'branch', '--show-current')

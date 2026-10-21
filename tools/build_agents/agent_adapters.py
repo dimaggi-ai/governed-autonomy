@@ -94,6 +94,9 @@ operator must own the destination and exclude concurrent directory mutations.
         for path in [target, *list(target.parents)[:3]]:
             if path.is_symlink():
                 raise ValueError('symlinked adapter destination refused')
+        for ancestor in list(target.parents)[:3]:
+            if ancestor.exists() and not ancestor.is_dir():
+                raise ValueError('adapter parent must be a directory')
         if not target.resolve().is_relative_to(root):
             raise ValueError('adapter path escapes destination')
         if target.exists() and (not target.is_file() or target.read_text() != content):

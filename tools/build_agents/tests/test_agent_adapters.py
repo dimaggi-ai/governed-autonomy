@@ -55,6 +55,16 @@ class AdapterTests(unittest.TestCase):
             self.assertFalse((Path(tmp) / '.codex').exists())
             self.assertEqual(target.read_text(), 'existing independent definition')
 
+    def test_file_parent_refused_before_any_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / '.claude'
+            parent.mkdir()
+            (parent / 'agents').write_text('preserve me')
+            with self.assertRaisesRegex(ValueError, 'parent must be'):
+                install(self.manifest, tmp)
+            self.assertFalse((Path(tmp) / '.codex').exists())
+            self.assertEqual((parent / 'agents').read_text(), 'preserve me')
+
     def test_symlink_destination_refused(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as other:
             (Path(tmp) / '.codex').symlink_to(other, target_is_directory=True)

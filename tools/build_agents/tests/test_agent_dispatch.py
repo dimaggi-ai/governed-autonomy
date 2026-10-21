@@ -123,6 +123,14 @@ class DispatchTests(unittest.TestCase):
                 dispatch.validate_packet(dict(self.packet, execution_block=block),
                                          ['example/service'], 'example/tasks')
 
+    def test_execution_owned_path_order_has_explicit_refusal(self):
+        self.packet['paths'] = ['src', 'outside.txt']
+        self.refresh_execution()
+        self.packet['execution_block'] = self.packet['execution_block'].replace(
+            '["src","outside.txt"]', '["outside.txt","src"]')
+        with self.assertRaisesRegex(dispatch.Refusal, 'JSON order and spelling exactly'):
+            self.plan()
+
     def test_known_contextual_prose_is_preserved_without_authority(self):
         self.packet['execution_block'] += '\nModel: example-model\nSession: sample-session\nLast checked: unknown\nHandoff: ask peer to review'
         _, receipt = self.execute()
@@ -286,6 +294,32 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(receipt['result'], 'failed')
         self.assertEqual(receipt['symlink_changes'], ['src/link'])
 
+    def test_unclassifiable_agent_filenames_are_retained_as_failure_evidence(self):
+        names = ['src/x:y', 'src/a\\b', 'src/line\nbreak', 'outside:scope']
+        body = 'from pathlib import Path\n'
+        for name in names:
+            body += 'Path(' + repr(name) + ').write_text("changed")\n'
+        body += "Path('src/link').symlink_to('../outside.txt')\n"
+        self.fake(body)
+        path, receipt = self.execute()
+        self.assertEqual(receipt['result'], 'failed')
+        self.assertCountEqual(receipt['unclassifiable_paths'], names)
+        self.assertCountEqual(receipt['outside_scope'], names)
+        self.assertEqual(receipt['symlink_changes'], ['src/link'])
+        self.assertEqual(receipt['head_after'], self.packet['base_sha'])
+        self.assertNotIn('error_type', receipt)
+        saved = json.loads(path.read_text())
+        self.assertEqual(saved, receipt)
+
+    def test_owning_file_does_not_allow_replacing_its_parent_directory(self):
+        self.packet['paths'] = ['src/one.py']
+        self.refresh_execution()
+        self.fake("from pathlib import Path\nPath('src/one.py').unlink()\nPath('src').rmdir()\nPath('src').write_text('ancestor write')\n")
+        _, receipt = self.execute()
+        self.assertEqual(receipt['result'], 'failed')
+        self.assertIn('src', receipt['outside_scope'])
+        self.assertNotIn('src/one.py', receipt['outside_scope'])
+
     def test_timeout_kills_runner_and_writes_failure_receipt(self):
         self.fake('import time\ntime.sleep(30)\n')
         self.packet['timebox_seconds'] = 1
@@ -323,6 +357,85 @@ class DispatchTests(unittest.TestCase):
         self.git('config', 'core.fsmonitor', str(hook))
         self.plan()
         self.assertFalse(marker.exists())
+
+    def test_status_disables_clean_and_process_filters_without_changing_config(self):
+        marker = self.root / 'filter-was-run'
+        hook = self.root / 'content-filter'
+        hook.write_text('#!' + sys.executable + '\nimport sys\nfrom pathlib import Path\nPath(' +
+                        repr(str(marker)) + ').touch()\nsys.stdout.write(sys.stdin.read())\n')
+        hook.chmod(0o700)
+        (self.checkout / '.gitattributes').write_text('src/one.py filter=review\n')
+        self.git('add', '.gitattributes')
+        self.git('commit', '-qm', 'attribute fixture')
+        self.packet['base_sha'] = self.git('rev-parse', 'HEAD')
+        self.refresh_execution()
+        # Exercise effective included config as well as repository-local config.
+        included = self.root / 'filters.gitconfig'
+        included.write_text('[filter "review"]\n    required = true\n    clean = ' + str(hook) + '\n')
+        self.git('config', 'include.path', str(included))
+        for field in ('clean', 'process'):
+            with self.subTest(field=field):
+                self.git('config', 'filter.review.' + field, str(hook))
+                source = self.checkout / 'src/one.py'
+                source.write_text('original\n')
+                os.utime(source, (time.time() + 2, time.time() + 2))
+                self.plan()
+                self.assertEqual(dispatch.changed_paths(self.checkout), [])
+                self.assertFalse(marker.exists())
+                self.assertEqual(self.git('config', '--get', 'filter.review.' + field), str(hook))
+
+    def test_uninitialized_submodule_gitlink_refused_before_status(self):
+        self.git('update-index', '--add', '--cacheinfo',
+                 '160000,' + self.packet['base_sha'] + ',src/vendor')
+        self.git('commit', '-qm', 'gitlink fixture')
+        self.packet['base_sha'] = self.git('rev-parse', 'HEAD')
+        self.refresh_execution()
+        with self.assertRaisesRegex(dispatch.Refusal, 'submodule gitlinks'):
+            self.plan()
+
+    def test_initialized_submodule_filter_cannot_execute_during_plan(self):
+        source = self.root / 'submodule-source'
+        source.mkdir()
+
+        def nested_git(directory, *args):
+            process = subprocess.run(['git', '-C', str(directory), *args],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            return process.stdout.strip()
+
+        nested_git(source, 'init', '-b', 'main')
+        nested_git(source, 'config', 'user.name', 'Example Test')
+        nested_git(source, 'config', 'user.email', 'test@example.invalid')
+        nested_git(source, 'config', 'core.hooksPath', '/dev/null')
+        (source / 'file.txt').write_text('original\n')
+        (source / '.gitattributes').write_text('file.txt filter=review\n')
+        nested_git(source, 'add', '.')
+        nested_git(source, 'commit', '-qm', 'nested fixture')
+        self.git('-c', 'protocol.file.allow=always', 'submodule', 'add', str(source), 'src/sub')
+        self.git('commit', '-qm', 'submodule fixture')
+        self.packet['base_sha'] = self.git('rev-parse', 'HEAD')
+        self.refresh_execution()
+        nested = self.checkout / 'src/sub'
+        marker = self.root / 'nested-filter-was-run'
+        hook = self.root / 'nested-filter'
+        hook.write_text('#!' + sys.executable + '\nimport sys\nfrom pathlib import Path\nPath(' +
+                        repr(str(marker)) + ').touch()\nsys.stdout.write(sys.stdin.read())\n')
+        hook.chmod(0o700)
+        nested_git(nested, 'config', 'filter.review.clean', str(hook))
+        path = nested / 'file.txt'
+        path.write_text('original\n')
+        os.utime(path, (time.time() + 2, time.time() + 2))
+        with self.assertRaisesRegex(dispatch.Refusal, 'submodule gitlinks'):
+            self.plan()
+        self.assertFalse(marker.exists())
+        with self.assertRaisesRegex(dispatch.Refusal, 'submodule gitlinks'):
+            dispatch.changed_paths(self.checkout)
+        self.assertFalse(marker.exists())
+
+    def test_unsupported_filter_names_fail_closed_before_status(self):
+        self.git('config', 'filter.driver=unsafe.clean', 'false')
+        with self.assertRaisesRegex(dispatch.Refusal, 'filter name'):
+            self.plan()
 
     def test_nonzero_cli_exit_is_failure(self):
         self.fake('raise SystemExit(4)\n')
