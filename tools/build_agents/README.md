@@ -145,7 +145,7 @@ Test success, refusal and corrected-recovery journeys. Where visuals help, verif
 legibility, spelling, units and claims and reuse the approved logo when appropriate.
 
 Source facts reject boolean measurement values even when Python would equate
-`true` with `1`. Ordinary finite numeric `1` and `1.0` remain equivalent; source
+`true` with `1`. Ordinary finite, non-negative numeric `1` and `1.0` remain equivalent; source
 identity/property/unit strings must be nonempty. This is evidence consistency,
 not source authentication or a hardware qualification claim.
 
