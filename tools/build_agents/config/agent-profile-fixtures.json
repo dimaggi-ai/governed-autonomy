@@ -1,0 +1,291 @@
+{
+  "schema": "dimaggi-agent-inference-fixtures/v1",
+  "execution_authority": false,
+  "evidence": [
+    {
+      "id": "synthetic-v1",
+      "url": "https://example.org/dimaggi/synthetic-fixture-v1",
+      "kind": "synthetic",
+      "license": "Authored synthetic fixture; no third-party measurements.",
+      "retrieved": "2026-10-21",
+      "effective": "2026-10-21",
+      "expires": "2027-10-21",
+      "payload": "{\"facts\":[{\"property\":\"throughput_per_second\",\"subject\":\"profile-a\",\"unit\":\"requests/s\",\"value\":10},{\"property\":\"rtt_ms\",\"subject\":\"chip\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"chip\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"chip\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"rtt_ms\",\"subject\":\"scale_up\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"scale_up\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"scale_up\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"rtt_ms\",\"subject\":\"scale_out\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"scale_out\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"scale_out\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"rtt_ms\",\"subject\":\"campus\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"campus\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"campus\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"rtt_ms\",\"subject\":\"metro\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"metro\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"metro\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"rtt_ms\",\"subject\":\"long_haul\",\"unit\":\"ms\",\"value\":1},{\"property\":\"bandwidth_gbps\",\"subject\":\"long_haul\",\"unit\":\"Gbit/s\",\"value\":100},{\"property\":\"loss_fraction\",\"subject\":\"long_haul\",\"unit\":\"fraction\",\"value\":0},{\"property\":\"announced_units\",\"subject\":\"announced-fixture\",\"unit\":\"synthetic_units\",\"value\":1},{\"property\":\"ordered_units\",\"subject\":\"ordered-fixture\",\"unit\":\"synthetic_units\",\"value\":1},{\"property\":\"delivered_units\",\"subject\":\"delivered-fixture\",\"unit\":\"synthetic_units\",\"value\":1},{\"property\":\"energized_units\",\"subject\":\"energized-fixture\",\"unit\":\"synthetic_units\",\"value\":1},{\"property\":\"qualified_units\",\"subject\":\"qualified-fixture\",\"unit\":\"synthetic_units\",\"value\":1}]}",
+      "sha256": "850d83d5db3820682b8e76510782becb3644a06d9017dcd4b045d19e7494c012"
+    },
+    {
+      "id": "tpu-reference",
+      "url": "https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm",
+      "kind": "public_source_reference",
+      "license": "Reference URL only; source reuse terms not evaluated; no content redistributed.",
+      "retrieved": "2026-10-21",
+      "effective": "2026-10-21",
+      "expires": "2027-10-21",
+      "payload": "{\"description\": \"Official TPU architecture documentation URL; consult and freeze a permitted snapshot before using its claims.\", \"reference_only\": true}",
+      "sha256": "a10b72536ffa3471d14d80300ea3b163286be0cffcc50186a4b06155672f85e5"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "profile-a",
+      "config": {
+        "hardware": "synthetic-gpu-a",
+        "vendor": "synthetic-vendor-a",
+        "runtime": "synthetic-runtime-v1",
+        "workload": "inference",
+        "model": "synthetic-model",
+        "precision": "fp16",
+        "input_tokens": 128,
+        "output_tokens": 64,
+        "batch": 1,
+        "concurrency": 1,
+        "accuracy": "fixed-synthetic-quality-v1",
+        "slo": {
+          "latency_p99_ms": 100,
+          "throughput_per_second": 10,
+          "availability_fraction": 0.99
+        }
+      },
+      "claims": [
+        {
+          "property": "throughput_per_second",
+          "value": 10,
+          "unit": "requests/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "left": "profile-a",
+      "right": "profile-a"
+    }
+  ],
+  "network_coverage": [
+    {
+      "tier": "chip",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "scale_up",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "scale_out",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "campus",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "metro",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "long_haul",
+      "claims": [
+        {
+          "property": "rtt_ms",
+          "value": 1,
+          "unit": "ms",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "bandwidth_gbps",
+          "value": 100,
+          "unit": "Gbit/s",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        },
+        {
+          "property": "loss_fraction",
+          "value": 0,
+          "unit": "fraction",
+          "kind": "synthetic",
+          "evidence": "synthetic-v1"
+        }
+      ]
+    },
+    {
+      "tier": "scale_in",
+      "operation": "drain_consolidate",
+      "requires_checkpoint": true
+    }
+  ],
+  "supply_states": [
+    {
+      "id": "announced-fixture",
+      "state": "announced",
+      "capacity_basis": "not_qualified",
+      "claim": {
+        "property": "announced_units",
+        "value": 1,
+        "unit": "synthetic_units",
+        "kind": "synthetic",
+        "evidence": "synthetic-v1"
+      }
+    },
+    {
+      "id": "ordered-fixture",
+      "state": "ordered",
+      "capacity_basis": "not_qualified",
+      "claim": {
+        "property": "ordered_units",
+        "value": 1,
+        "unit": "synthetic_units",
+        "kind": "synthetic",
+        "evidence": "synthetic-v1"
+      }
+    },
+    {
+      "id": "delivered-fixture",
+      "state": "delivered",
+      "capacity_basis": "not_qualified",
+      "claim": {
+        "property": "delivered_units",
+        "value": 1,
+        "unit": "synthetic_units",
+        "kind": "synthetic",
+        "evidence": "synthetic-v1"
+      }
+    },
+    {
+      "id": "energized-fixture",
+      "state": "energized",
+      "capacity_basis": "not_qualified",
+      "claim": {
+        "property": "energized_units",
+        "value": 1,
+        "unit": "synthetic_units",
+        "kind": "synthetic",
+        "evidence": "synthetic-v1"
+      }
+    },
+    {
+      "id": "qualified-fixture",
+      "state": "qualified",
+      "capacity_basis": "qualified_service",
+      "claim": {
+        "property": "qualified_units",
+        "value": 1,
+        "unit": "synthetic_units",
+        "kind": "synthetic",
+        "evidence": "synthetic-v1"
+      }
+    }
+  ]
+}
