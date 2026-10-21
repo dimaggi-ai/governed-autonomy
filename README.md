@@ -112,7 +112,3 @@ This is an **architecture and a sourced latency map**, not a cluster or network 
 ---
 
 *Margaret (Maggie) Nanyonga — Founder & Principal Architect, [DIMAGGI AI](https://dimaggi.ai). Governed AI infrastructure: the control, reliability, and audit layer for autonomous systems operating production networks and compute.*
-
-## Bounded coding-agent coordination
-
-[Build-agent adapters](tools/build_agents/README.md) provide shared Codex/Claude role generation, explicit time-limited dispatch and evidence checks for delivery, cost, data coverage and inference profiles. They reuse the existing tracker and promotion process. They do not grant production authority or claim measured hardware performance. Run `make build-agents-test` for offline adversarial checks.

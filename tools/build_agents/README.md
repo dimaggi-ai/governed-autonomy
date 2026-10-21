@@ -119,3 +119,5 @@ python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.jso
 ```
 
 The generator creates seven `.codex/agents/*.toml` and seven `.claude/agents/*.md` files. Start a fresh harness session to discover new definitions. Installation changes no sandbox, approval setting or credential. Existing different definitions require a reviewed migration preserving the previous manifest and files.
+
+Runtime compatibility: on Codex CLI 0.160.0 in the inspected installation, named custom-role selection was not exposed even though the TOML files parsed. Explicit generic-subagent delegation with the reviewed role instructions was verified. If named selection is unavailable, the parent must read the generated role, pass its instructions to one scoped generic subagent, and label that fallback honestly; never silently emulate a delegated review. The child inherits the parent sandbox. Native named discovery must be rechecked after runtime upgrades.
