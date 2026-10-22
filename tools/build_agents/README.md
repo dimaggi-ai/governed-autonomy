@@ -7,6 +7,7 @@ This package adds a small orchestration boundary to governed-autonomy. It does n
 ## What runs
 
 - `agent_adapters.py`: generates matching Codex and Claude role definitions from one reviewed manifest. Models and permissions remain inherited. Existing different files are refused, not overwritten.
+- `scripts/agent_supervisor.py`: one short-lived child per dispatch, owning the runner process group, deadline and bounded log even if the dispatcher exits. Keep it beside `agent_dispatch.py`; it is not a daemon.
 - `scripts/agent_dispatch.py`: validates an explicit tracker work packet against a trusted repository allowlist and clean pinned checkout. Default is a plan. `--execute` runs an installed CLI, with a cooperative scope claim, wall-clock timeout, capped output and a result receipt.
 - `scripts/agent_evidence.py`: validates delivery evidence, calculates cost per accepted outcome and matched baseline cost-saving ROI, measures data-governance coverage, and screens improvement candidates for independent review.
 - `scripts/agent_profile_contract.py`: checks a public/synthetic **inference** fixture contract. It binds provenance, exact workload/SLO configuration, measured portability evidence, network measurement configuration and distinct supply states. It does not calculate infrastructure performance or establish hardware qualification.
@@ -55,6 +56,55 @@ Add `--execute` only for the currently authorized task. Default CLI safeguards r
 The execution host is part of the trust boundary. Input allowlists, tracker observations and CLI binaries must be supplied by a trusted operator, not by a candidate repository. Agent-generated files and retrieved web content are untrusted data. Scope claims serialize cooperating processes sharing one host/root. They are not distributed locks: use the existing centralized workflow's concurrency and tracker assignment before dispatching across hosts. A crashed claim is investigated; elapsed time never grants takeover.
 
 Path restrictions are prompt constraints plus Git-visible post-run detection, **not filesystem containment**. Ignored files, transient edits and external effects are outside that check. Use independently enforced sandbox/tool/egress policy for those boundaries. An agent running as the user's UID is not hostile-agent isolation. The adapter enforces wall time and captured output, **not token or dollar spending caps**. Same-host receipts and caller-supplied evidence are not cryptographically authenticated. Do not auto-retry an uncertain external outcome.
+
+### Interrupted jobs and claim reconciliation
+
+```mermaid
+flowchart LR
+    D[Dispatcher and scope claim] -->|private liveness pipe| S[Per-job supervisor]
+    S -->|deadline and output cap| R[Runner process group]
+    S --> P[Independent process.json]
+    D --> F[Final receipt.json]
+```
+
+SIGINT, SIGTERM and SIGHUP stop the runner group through the supervisor, then
+produce a failed receipt naming the interruption and recording the process exit
+and cleanup result. The claim is released only after cleanup is confirmed. A
+missing or unsuccessful cleanup confirmation retains the claim even if the
+runner's leader exited successfully. Group verification uses POSIX `ps`; an
+unavailable or denied process inspection fails closed and retains ownership.
+
+If the dispatcher is killed with SIGKILL, its liveness pipe closes. The separate
+supervisor terminates the runner group and records `dispatcher_lost` in
+`process.json`; its independent deadline remains active. The dispatcher cannot
+write a final receipt or remove its claim after SIGKILL. No runner or descendant
+inherits the pipe's write descriptor. Cleanup allows at most five seconds to
+reap the leader and a separate five seconds for group verification after sending
+SIGKILL; this is cleanup observation, not additional authorized runtime.
+
+The fake-runner regressions observe parent and child heartbeats past a two-second
+timebox before any harness cleanup, and check that no claim is granted while
+those processes remain live. A baseline SIGKILL drill reproduced writes beyond
+the timebox. These tests are local POSIX evidence, not production qualification.
+
+The lifetime guarantee assumes the supervisor and host scheduler remain
+operational and descendants remain in the runner's process group. Killing or
+stopping the supervisor itself, host failure, uninterruptible kernel waits and
+children escaping into other sessions require an external OS/job supervisor.
+This is not containment of a hostile agent with the same UID, and it does not
+weaken the harness sandbox or tool policy.
+
+A stale claim never becomes free merely because its PID disappeared or its
+expected deadline elapsed. Before an operator removes it, reconcile the exact
+tracker Execution holder, claim/run mapping in `dispatch-start.json`, and
+`supervisor-start.json` process-group
+identity with `process.json` and current host process state. Confirm the runner,
+its group and any known escaped descendants have stopped, and that the recorded
+checkout's writes have stopped; account for PID reuse rather than sending a
+signal to an unverified PID. If any identity or cleanup evidence is missing,
+retain the claim and investigate. Archive that proof and the original claim,
+then remove only the reconciled claim under the same guard lock. No automatic
+stale-claim deletion or second writer is introduced here.
 
 Model agreement cannot grant production authority, change safety policies or approve its own evaluator. Critical actions need the qualified domain authority and safe-state design. Fast protective controllers must use prevalidated deterministic behavior rather than wait on a conversational agent.
 

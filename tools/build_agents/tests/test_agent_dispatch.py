@@ -7,6 +7,7 @@ import json
 import multiprocessing
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -358,6 +359,112 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(receipt['result'], 'failed')
         self.assertTrue(path.is_file())
         self.assertFalse(list((self.root / '.agent-dispatch-locks').glob('*.json')))
+
+    def interruption_journey(self, signum):
+        self.packet['timebox_seconds'] = 2
+        self.refresh_execution()
+        packet = self.root / 'packet.json'
+        packet.write_text(json.dumps(self.packet))
+        pids = self.root / 'runner-pids.json'
+        self.fake('import json, os, time\nfrom pathlib import Path\n'
+                  'child = os.fork()\n'
+                  'if child: Path(' + repr(str(pids)) + ').write_text(json.dumps([os.getpid(), child]))\n'
+                  'beat = Path("src/parent-beat" if child else "src/child-beat")\n'
+                  'end = time.monotonic() + 20\n'
+                  'while time.monotonic() < end:\n'
+                  '    with beat.open("a") as f: f.write(str(time.monotonic()) + "\\n")\n'
+                  '    time.sleep(0.05)\n')
+        bin_dir = self.root / 'bin'; bin_dir.mkdir()
+        (bin_dir / 'codex').symlink_to(self.binary)
+        env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'],
+                   TMPDIR=str(self.root), PYTHONDONTWRITEBYTECODE='1')
+        argv = [sys.executable, str(MODULE), '--packet', str(packet),
+                '--trusted-root', str(self.root), '--checkout', str(self.checkout),
+                '--tracker-repository', 'example/tasks', '--allow-repository', 'example/service', '--execute']
+        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        runner_pids = []
+        def live(pid):
+            found = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='],
+                                   capture_output=True, text=True, check=False)
+            return bool(found.stdout.strip()) and not found.stdout.strip().startswith('Z')
+        try:
+            deadline = time.monotonic() + 5
+            while not pids.exists() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(pids.exists(), 'runner never started')
+            runner_pids = json.loads(pids.read_text())
+            with self.assertRaises(dispatch.Refusal):
+                with dispatch.scope_claim(self.root, 'example/service', ['src']): pass
+            process.send_signal(signum)
+            # Observe beyond the timebox without killing any process from the
+            # harness. While a claim can be acquired, neither runner may be live.
+            until = time.monotonic() + self.packet['timebox_seconds'] + 1
+            while time.monotonic() < until:
+                try:
+                    with dispatch.scope_claim(self.root, 'example/service', ['src']):
+                        self.assertFalse(any(live(pid) for pid in runner_pids), 'claim released while runner alive')
+                except dispatch.Refusal:
+                    pass
+                time.sleep(0.05)
+            self.assertFalse(any(live(pid) for pid in runner_pids), 'runner outlived dispatcher and timebox')
+            beats = [self.checkout / 'src' / name for name in ('parent-beat', 'child-beat')]
+            before = [p.read_bytes() for p in beats]
+            time.sleep(0.2)
+            self.assertEqual([p.read_bytes() for p in beats], before, 'writes continued after cleanup')
+            stdout, stderr = process.communicate(timeout=5)
+            runs = list((self.root / '.agent-dispatch-runs').iterdir())
+            self.assertEqual(len(runs), 1)
+            if signum != signal.SIGKILL:
+                receipt = json.loads((runs[0] / 'receipt.json').read_text())
+                self.assertEqual(receipt['result'], 'failed')
+                self.assertEqual(receipt['process']['reason'], 'interrupted_' + signal.Signals(signum).name)
+                self.assertTrue(receipt['process']['runner_stopped'])
+                self.assertEqual(process.returncode, 1, (stdout, stderr))
+                self.assertFalse(list((self.root / '.agent-dispatch-locks').glob('*.json')))
+            else:
+                # SIGKILL cannot produce a parent receipt. The supervisor's
+                # independent process record plus retained claim are evidence.
+                state = json.loads((runs[0] / 'process.json').read_text())
+                self.assertEqual(state['reason'], 'dispatcher_lost')
+                self.assertTrue(state['runner_stopped'])
+                start = json.loads((runs[0] / 'dispatch-start.json').read_text())
+                self.assertTrue((self.root / '.agent-dispatch-locks' / start['claim']).is_file())
+        finally:
+            # Emergency harness cleanup happens only after observations/assertions.
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+            for pid in runner_pids:
+                try: os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+
+    def test_sigint_cleanup_receipt_and_claim_exclusion(self):
+        self.interruption_journey(signal.SIGINT)
+
+    def test_sigterm_cleanup_receipt_and_claim_exclusion(self):
+        self.interruption_journey(signal.SIGTERM)
+
+    def test_sighup_cleanup_receipt_and_claim_exclusion(self):
+        self.interruption_journey(signal.SIGHUP)
+
+    def test_sigkill_cannot_leave_runner_or_children_past_timebox(self):
+        self.interruption_journey(signal.SIGKILL)
+
+    def test_unconfirmed_group_cleanup_preserves_claim_and_failed_process_receipt(self):
+        uncertain = dict(reason='completed', exit_code=0, captured_bytes=0, runner_stopped=False)
+        with mock.patch.object(dispatch, 'bounded_process', return_value=uncertain):
+            path, receipt = self.execute()
+        self.assertEqual(receipt['result'], 'failed')
+        self.assertEqual(receipt['process'], uncertain)
+        self.assertFalse(receipt['claim_release_safe'])
+        self.assertTrue(path.is_file())
+        self.assertTrue(list((self.root / '.agent-dispatch-locks').glob('*.json')))
+        with self.assertRaises(dispatch.Refusal):
+            with dispatch.scope_claim(self.root, 'example/service', ['src']): pass
+
+    def test_signal_handlers_restored_after_dispatch(self):
+        before = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+        self.execute()
+        self.assertEqual({s: signal.getsignal(s) for s in before}, before)
 
     def test_output_budget_caps_log_and_kills_runner(self):
         self.fake("import os, time\nos.write(1, b'x' * 65536)\ntime.sleep(30)\n")

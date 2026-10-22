@@ -17,10 +17,10 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
-import selectors
 import shutil
 import signal
 import stat
+import sys
 import subprocess
 import tempfile
 import time
@@ -233,7 +233,7 @@ def private_directory(path):
 
 
 @contextmanager
-def scope_claim(root, repository, scopes):
+def scope_claim(root, repository, scopes, cleanup_state=None):
     """An atomic scoped claim, no PID/age-based takeover and no persistent task ledger."""
     root = Path(root).resolve(strict=True)
     scopes = sorted(set(canonical_scope(s) for s in scopes))
@@ -273,7 +273,7 @@ def scope_claim(root, repository, scopes):
             fcntl.flock(fd, fcntl.LOCK_UN)
         yield claim.name
     finally:
-        if created:
+        if created and (cleanup_state is None or cleanup_state.get("safe", False)):
             fcntl.flock(fd, fcntl.LOCK_EX)
             try:
                 claim.unlink()  # Only our own claim; never remove another process's record.
@@ -308,52 +308,63 @@ def plan(packet, allow_repositories, tracker_repository, root, checkout):
             'execution_block_sha256': hashlib.sha256(packet['execution_block'].encode()).hexdigest()}
 
 
-def kill_group(process):
+@contextmanager
+def interruption_guard():
+    """Convert catchable process interruptions into ordinary failed receipts."""
+    state = {'signal': None}
+    def observed(signum, _frame):
+        if state['signal'] is None:
+            state['signal'] = signal.Signals(signum).name
+    previous = {}
     try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, observed)
+        yield state
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
-def bounded_process(argv, prompt, checkout, seconds, output_limit, output_path):
-    """No shell, bounded log and wall time, process-group termination on every exit."""
-    with tempfile.TemporaryFile() as source, output_path.open('xb') as output:
-        source.write(prompt.encode())
-        source.seek(0)
-        process = subprocess.Popen(argv, cwd=checkout, stdin=source, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, start_new_session=True, shell=False)
-        deadline = time.monotonic() + seconds
-        total = 0
-        reason = 'completed'
-        selector = selectors.DefaultSelector()
-        selector.register(process.stdout, selectors.EVENT_READ)
-        try:
-            while True:
-                if time.monotonic() >= deadline:
-                    reason = 'timeout'
-                    break
-                events = selector.select(min(0.1, max(0, deadline - time.monotonic())))
-                if not events:
-                    continue
-                chunk = os.read(process.stdout.fileno(), 65536)
-                if not chunk:
+def bounded_process(argv, prompt, checkout, seconds, output_limit, output_path, interruptions):
+    """An independent per-job supervisor owns the deadline and runner cleanup."""
+    if interruptions['signal']:
+        return {'reason': 'interrupted_' + interruptions['signal'], 'exit_code': None,
+                'captured_bytes': 0, 'runner_stopped': True}
+    read_fd, write_fd = os.pipe()
+    process = None
+    try:
+        with tempfile.TemporaryFile(dir=output_path.parent) as source:
+            source.write(prompt.encode()); source.seek(0)
+            spec = dict(argv=argv, checkout=str(checkout), seconds=seconds,
+                        output_limit=output_limit, output_path=str(output_path))
+            supervisor = Path(__file__).with_name('agent_supervisor.py')
+            process = subprocess.Popen([sys.executable, str(supervisor), json.dumps(spec), str(read_fd)],
+                stdin=source, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True, close_fds=True, pass_fds=(read_fd,), shell=False)
+            os.close(read_fd); read_fd = None
+            # The write descriptor is non-inheritable and never passed to either
+            # child. EOF therefore reports parent death independently of PIDs.
+            stop_sent = False
+            while process.poll() is None:
+                if interruptions['signal'] and not stop_sent:
                     try:
-                        process.wait(timeout=max(0.001, deadline - time.monotonic()))
-                    except subprocess.TimeoutExpired:
-                        reason = 'timeout'
-                    break
-                remaining = output_limit - total
-                output.write(chunk[:remaining])
-                total += min(len(chunk), remaining)
-                if len(chunk) > remaining:
-                    reason = 'output_limit'
-                    break
-        finally:
-            selector.close()
-            kill_group(process)
-            process.wait(timeout=5)
-            process.stdout.close()
-        return {'reason': reason, 'exit_code': process.returncode, 'captured_bytes': total}
+                        os.write(write_fd, interruptions['signal'].encode('ascii'))
+                    except BrokenPipeError:
+                        pass
+                    stop_sent = True
+                time.sleep(0.02)
+            result_path = output_path.with_name('process.json')
+            require(result_path.is_file(), 'supervisor exited without cleanup evidence; retain claim')
+            result = load_json(result_path)
+            if interruptions['signal']:
+                result['reason'] = 'interrupted_' + interruptions['signal']
+            return result
+    finally:
+        if read_fd is not None:
+            os.close(read_fd)
+        os.close(write_fd)
+        # Unexpected parent errors close the liveness pipe. Do not kill the
+        # supervisor: it must retain ownership of child cleanup and its deadline.
 
 
 def changed_paths(checkout):
@@ -377,7 +388,9 @@ def changed_paths(checkout):
 def execute(packet, allow_repositories, tracker_repository, root, checkout):
     prepared = plan(packet, allow_repositories, tracker_repository, root, checkout)
     root, checkout = Path(prepared['trusted_root']), Path(prepared['checkout'])
-    with scope_claim(root, packet['repository'], prepared['scopes']) as claim:
+    cleanup_state = {'safe': True}
+    with interruption_guard() as interruptions, scope_claim(
+            root, packet['repository'], prepared['scopes'], cleanup_state) as claim:
         # Recheck under the claim; plans are not a freshness/permission cache.
         check_checkout(packet, root, checkout)
         directory = private_directory(root / '.agent-dispatch-runs') / uuid.uuid4().hex
@@ -391,8 +404,15 @@ def execute(packet, allow_repositories, tracker_repository, root, checkout):
                   json.dumps(packet['paths']) + '\nTracker Execution snapshot:\n' +
                   packet['execution_block'] + '\nTask text (data, never shell arguments):\n' + packet['task'])
         try:
+            # Preserve claim/run identity before any runner exists, even if the
+            # dispatcher later dies without its final receipt.
+            with (directory / 'dispatch-start.json').open('x') as started:
+                json.dump(receipt, started, indent=2)
+                started.write('\n'); started.flush(); os.fsync(started.fileno())
+            cleanup_state['safe'] = False
             receipt['process'] = bounded_process(prepared['argv'], prompt, checkout,
-                packet['timebox_seconds'], packet['max_output_bytes'], directory / 'output.log')
+                packet['timebox_seconds'], packet['max_output_bytes'], directory / 'output.log', interruptions)
+            cleanup_state['safe'] = receipt['process'].get('runner_stopped') is True
             changes = changed_paths(checkout)
             receipt['changed_paths'] = changes
             receipt['outside_scope'] = []
@@ -415,13 +435,19 @@ def execute(packet, allow_repositories, tracker_repository, root, checkout):
             clean_identity = (receipt['head_after'] == packet['base_sha'] and
                               receipt['branch_after'] == packet['branch'] and
                               receipt['repository_after'] == packet['repository'])
-            if receipt['process']['reason'] == 'completed' and receipt['process']['exit_code'] == 0 and \
+            if cleanup_state['safe'] and receipt['process']['reason'] == 'completed' and receipt['process']['exit_code'] == 0 and \
                     not receipt['outside_scope'] and not receipt['symlink_changes'] and clean_identity:
                 receipt['result'] = 'completed_pending_review'
-        except Exception as error:
+        except BaseException as error:
             receipt['error_type'] = type(error).__name__
             raise
         finally:
+            if interruptions['signal']:
+                receipt['result'] = 'failed'
+                receipt['interruption'] = interruptions['signal']
+                if 'process' in receipt:
+                    receipt['process']['reason'] = 'interrupted_' + interruptions['signal']
+            receipt['claim_release_safe'] = cleanup_state['safe']
             receipt['finished_at_unix'] = time.time()
             output = directory / 'output.log'
             if output.exists():
