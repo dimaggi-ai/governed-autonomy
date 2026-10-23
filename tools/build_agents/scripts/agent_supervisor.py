@@ -40,7 +40,7 @@ def group_stopped(pgid):
             if len(columns) != 4:
                 return False
             pid, group, uid = map(int, columns[:3])
-            if pid <= 0 or group <= 0 or uid < 0:
+            if pid <= 0 or group < 0 or uid < 0:
                 return False
             if pid == observer_pid:
                 continue  # Only this exact launched observer may be omitted.
