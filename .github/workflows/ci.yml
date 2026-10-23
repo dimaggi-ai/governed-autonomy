@@ -13,6 +13,8 @@ jobs:
         run: |
           python3 gate/test_gate.py
           python3 -m unittest gate.test_evidence -v
+      - name: Bounded build-agent adapters and evidence contracts
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/build_agents/tests -v
       # The JSON is the exhibit's data file and IS byte-reproducible, so an
       # edit to it that was never regenerated fails here. The PNG is not:
       # matplotlib/freetype render text differently across builds, so its
