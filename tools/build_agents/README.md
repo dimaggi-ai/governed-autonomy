@@ -67,32 +67,89 @@ flowchart LR
     D --> F[Final receipt.json]
 ```
 
-SIGINT, SIGTERM and SIGHUP stop the runner group through the supervisor, then
-produce a failed receipt naming the interruption and recording the process exit
-and cleanup result. The claim is released only after cleanup is confirmed. A
-missing or unsuccessful cleanup confirmation retains the claim even if the
-runner's leader exited successfully. Group verification uses POSIX `ps`; an
-unavailable or denied process inspection fails closed and retains ownership.
+SIGINT, SIGTERM and SIGHUP request termination of the runner's **original
+process group** through the supervisor. The failed receipt names the dispatcher
+interruption; `process.supervisor_reason` preserves a different original reason,
+such as a deadline that expired before the interruption. `supervisor-start.json`
+records `running`, runner/session/group IDs and UID; it is not cleanup proof.
 
-If the dispatcher is killed with SIGKILL, its liveness pipe closes. The separate
-supervisor terminates the runner group and records `dispatcher_lost` in
-`process.json`; its independent deadline remains active. The dispatcher cannot
-write a final receipt or remove its claim after SIGKILL. No runner or descendant
-inherits the pipe's write descriptor. Cleanup allows at most five seconds to
-reap the leader and a separate five seconds for group verification after sending
-SIGKILL; this is cleanup observation, not additional authorized runtime.
+A claim is released only when the supervisor confirms that no non-zombie member
+of the original group or same-UID process in the original runner session remains.
+A child using `setpgid` can escape the original group's kill but remains visible
+in that session: it keeps ownership until separately reconciled. The supervisor
+**does not signal another group or escaped session**. Unsupported, denied,
+malformed or timed-out process inspection is uncertain and retains the claim.
+The observation uses `ps` columns `pid,pgid,uid,stat` and
+`getsid`; it is not a portable guarantee for every POSIX host. A disappearing
+same-UID row invalidates that snapshot because it may have forked an unseen
+child; the next scan retries. Only the exact launched observer PID is ignored. Every exception after entering `Popen`, including `OSError` or
+`FileNotFoundError`, leaves `launch_uncertain: true` and retains the claim. An
+exception class does not establish that a forked child was reaped. Even a missing
+executable can therefore require reconciliation; there is no automatic retry.
 
-The fake-runner regressions observe parent and child heartbeats past a two-second
-timebox before any harness cleanup, and check that no claim is granted while
-those processes remain live. A baseline SIGKILL drill reproduced writes beyond
-the timebox. These tests are local POSIX evidence, not production qualification.
+Runner termination happens before selector/control-descriptor cleanup. Close
+failures are retained in `cleanup_errors` and do not prevent the process receipt.
+An unavailable receipt still retains ownership. Cleanup allows up to five seconds
+to reap the leader, then a five-second observation window; a final process query
+may use two seconds plus up to two more seconds to reap its observer. Failed inspection is retried within that window.
+This is cleanup observation, not extra authorized runtime. Only the original
+recorded group is killed once; observed live members of that group or same-UID
+session after the kill keep the claim.
 
-The lifetime guarantee assumes the supervisor and host scheduler remain
-operational and descendants remain in the runner's process group. Killing or
-stopping the supervisor itself, host failure, uninterruptible kernel waits and
-children escaping into other sessions require an external OS/job supervisor.
-This is not containment of a hostile agent with the same UID, and it does not
-weaken the harness sandbox or tool policy.
+If SIGKILL kills the dispatcher, its private liveness pipe closes. The independent
+supervisor terminates the original group and records `dispatcher_lost` in
+`process.json`. If SIGSTOP merely suspends the dispatcher, the supervisor's own
+deadline still expires. No runner descendant inherits the write descriptor.
+The killed dispatcher cannot write its final receipt or remove its claim. If the
+supervisor itself is killed, the dispatcher refuses missing cleanup evidence and
+retains the claim; it cannot claim that surviving runners have stopped.
+
+Run only through the CLI or a single-threaded caller. Unrelated concurrent
+forks without exec can inherit the dispatcher's liveness descriptor and hide its
+death. During execution the interruption guard deliberately handles SIGHUP even
+if the caller inherited an ignored SIGHUP (`nohup`); it restores prior handlers
+afterwards. This is not a detached-service contract.
+
+Process IDs/session snapshots are observations, not durable authenticated process
+handles. The leader can be reaped before the group kill, leaving a PID/group-reuse
+race. Descendants creating a new session (`setsid`), changed UIDs, host failure,
+a stopped/killed supervisor, scheduler stalls and uninterruptible kernel waits
+need an external OS/job supervisor and operator reconciliation. Snapshot scanning
+cannot prove the absence of all escaped or concurrently changing descendants.
+This is **not OS containment** or hostile same-UID isolation; native harness
+sandboxes, tool policy and independent acceptance remain necessary.
+
+### Synthetic interruption regressions
+
+`test_agent_dispatch.py` uses disposable Git roots and fake runners only. Its
+new real-process cases cap long-lived processes at four (dispatcher, supervisor,
+runner and one child), bound fake heartbeats to 20 seconds and clean up only the
+recorded IDs after checking the session, UID/start-time/argument fingerprint
+and unique disposable path; a supervisor already observed exited is not signaled. They exercise a dispatcher deadline
+while SIGSTOPped, killed supervisor, child `setpgid`, and SIGTERM followed by
+SIGKILL. Existing INT/TERM/HUP/KILL tests also verify supervisor exit and the
+recorded original group. Mocked failure cases cover uncertain launch, descriptor
+cleanup, unavailable inspection and original stop-reason retention. These are
+local synthetic checks, not real coding-CLI or production qualification.
+
+The launch, close-order, late-reason and `setpgid` regressions fail against
+`cd7bd865cad5bc2738417be0b3b0fceb54adce81`. For a matched reproduction, place that
+commit's `agent_dispatch.py` and `agent_supervisor.py` beside the current test file
+in a disposable source directory and run the following four tests there. Keep
+stdout/stderr and exit status from baseline and candidate separately:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v \
+  test_agent_dispatch.SupervisorFailureTests.test_all_uncertain_launch_exceptions_retain_claim \
+  test_agent_dispatch.SupervisorFailureTests.test_close_failures_cannot_skip_runner_kill_or_receipt \
+  test_agent_dispatch.DispatchTests.test_late_interruption_preserves_supervisor_reason \
+  test_agent_dispatch.DispatchTests.test_setpgid_child_retains_claim_while_writing
+```
+
+Retain exact source hashes, Python/OS versions, commands, process receipts,
+heartbeat observations and cleanup results with the execution handoff. A separate
+runner from the reviewing tool must reproduce the candidate; real CLI and escaped
+session qualification remains an independently approved, bounded drill.
 
 A stale claim never becomes free merely because its PID disappeared or its
 expected deadline elapsed. Before an operator removes it, reconcile the exact

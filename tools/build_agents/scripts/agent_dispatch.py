@@ -357,6 +357,7 @@ def bounded_process(argv, prompt, checkout, seconds, output_limit, output_path, 
             require(result_path.is_file(), 'supervisor exited without cleanup evidence; retain claim')
             result = load_json(result_path)
             if interruptions['signal']:
+                result.setdefault('supervisor_reason', result['reason'])
                 result['reason'] = 'interrupted_' + interruptions['signal']
             return result
     finally:
@@ -446,6 +447,7 @@ def execute(packet, allow_repositories, tracker_repository, root, checkout):
                 receipt['result'] = 'failed'
                 receipt['interruption'] = interruptions['signal']
                 if 'process' in receipt:
+                    receipt['process'].setdefault('supervisor_reason', receipt['process']['reason'])
                     receipt['process']['reason'] = 'interrupted_' + interruptions['signal']
             receipt['claim_release_safe'] = cleanup_state['safe']
             receipt['finished_at_unix'] = time.time()

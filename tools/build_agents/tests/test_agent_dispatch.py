@@ -1,6 +1,7 @@
 """Offline regression tests: no model calls, credentials, network, push or merge."""
 import contextlib
 import copy
+import errno
 import importlib.util
 import io
 import json
@@ -21,6 +22,9 @@ if not MODULE.exists():
 spec = importlib.util.spec_from_file_location('agent_dispatch', MODULE)
 dispatch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dispatch)
+supervisor_spec = importlib.util.spec_from_file_location('agent_supervisor', MODULE.with_name('agent_supervisor.py'))
+supervisor = importlib.util.module_from_spec(supervisor_spec)
+supervisor_spec.loader.exec_module(supervisor)
 
 
 def claim_worker(root, start, release, answers):
@@ -414,6 +418,9 @@ class DispatchTests(unittest.TestCase):
             stdout, stderr = process.communicate(timeout=5)
             runs = list((self.root / '.agent-dispatch-runs').iterdir())
             self.assertEqual(len(runs), 1)
+            started = json.loads((runs[0] / 'supervisor-start.json').read_text())
+            self.assertEqual(started['process_group'], runner_pids[0])
+            self.assertFalse(live(started['supervisor_pid']))
             if signum != signal.SIGKILL:
                 receipt = json.loads((runs[0] / 'receipt.json').read_text())
                 self.assertEqual(receipt['result'], 'failed')
@@ -448,6 +455,161 @@ class DispatchTests(unittest.TestCase):
 
     def test_sigkill_cannot_leave_runner_or_children_past_timebox(self):
         self.interruption_journey(signal.SIGKILL)
+
+    def test_late_interruption_preserves_supervisor_reason(self):
+        def late_signal(*args):
+            os.kill(os.getpid(), signal.SIGTERM)
+            return dict(reason='timeout', exit_code=-9, captured_bytes=0, runner_stopped=True)
+        with mock.patch.object(dispatch, 'bounded_process', side_effect=late_signal):
+            _, receipt = self.execute()
+        self.assertEqual(receipt['process']['reason'], 'interrupted_SIGTERM')
+        self.assertEqual(receipt['process']['supervisor_reason'], 'timeout')
+
+    def controlled_failure_journey(self, mode):
+        # Maximum four long-lived processes: dispatcher, supervisor, runner,
+        # one child. Every fake runner self-expires; cleanup targets recorded IDs.
+        self.packet['timebox_seconds'] = 2
+        self.refresh_execution()
+        packet = self.root / 'packet.json'; packet.write_text(json.dumps(self.packet))
+        pids = self.root / 'runner-pids.json'
+        self.fake('import json, os, time\nfrom pathlib import Path\n'
+                  'child = os.fork()\n'
+                  'if child:\n'
+                  '    target = Path(' + repr(str(pids)) + ')\n'
+                  '    target.with_suffix(".tmp").write_text(json.dumps([os.getpid(), child]))\n'
+                  '    target.with_suffix(".tmp").replace(target)\n'
+                  + ('else: os.setpgid(0, 0)\n' if mode == 'escaped' else '') +
+                  'beat = Path("src/parent-beat" if child else "src/child-beat")\n'
+                  'end = time.monotonic() + 20\n'
+                  'while time.monotonic() < end:\n'
+                  '    with beat.open("a") as f: f.write("beat\\n")\n'
+                  '    time.sleep(0.05)\n')
+        bin_dir = self.root / 'bin'; bin_dir.mkdir()
+        (bin_dir / 'codex').symlink_to(self.binary)
+        env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'],
+                   TMPDIR=str(self.root), PYTHONDONTWRITEBYTECODE='1')
+        argv = [sys.executable, str(MODULE), '--packet', str(packet),
+                '--trusted-root', str(self.root), '--checkout', str(self.checkout),
+                '--tracker-repository', 'example/tasks', '--allow-repository', 'example/service', '--execute']
+        process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        runner_pids, supervisor_pid = [], None
+        identities = {}
+        supervisor_finished = False
+        def identity(pid):
+            state = subprocess.run(['ps', '-p', str(pid), '-o', 'uid=,lstart=,args='],
+                                   capture_output=True, text=True, timeout=2)
+            if state.returncode == 1 and not state.stdout.strip() and not state.stderr.strip():
+                return None
+            self.assertEqual(state.returncode, 0, state.stderr)
+            self.assertTrue(state.stdout.strip(), 'unknown process identity')
+            return state.stdout.strip()
+        def live(pid):
+            state = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='],
+                                   capture_output=True, text=True, timeout=2)
+            if state.returncode == 1 and not state.stdout.strip() and not state.stderr.strip(): return False
+            self.assertEqual(state.returncode, 0, state.stderr)
+            self.assertTrue(state.stdout.strip(), 'unknown process liveness')
+            return not state.stdout.strip().startswith('Z')
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                starts = list((self.root / '.agent-dispatch-runs').glob('*/supervisor-start.json'))
+                if starts and pids.exists() and (self.checkout / 'src/child-beat').exists(): break
+                time.sleep(0.02)
+            self.assertTrue(starts and pids.exists(), 'bounded fake runner did not start')
+            runner_pids = json.loads(pids.read_text())
+            self.assertEqual(len(runner_pids), 2)
+            run = starts[0].parent
+            started = json.loads(starts[0].read_text())
+            supervisor_pid = started['supervisor_pid']
+            self.assertEqual(started['process_group'], runner_pids[0])
+            self.assertEqual(os.getsid(supervisor_pid), supervisor_pid)
+            self.assertTrue(all(os.getsid(pid) == runner_pids[0] for pid in runner_pids))
+            for pid in [*runner_pids, supervisor_pid]:
+                identities[pid] = identity(pid)
+                self.assertIsNotNone(identities[pid])
+                self.assertIn(str(self.root), identities[pid])
+            if mode == 'stopped_dispatcher':
+                process.send_signal(signal.SIGSTOP)
+                end = time.monotonic() + 9
+                while not (run / 'process.json').exists() and time.monotonic() < end: time.sleep(0.02)
+                state = json.loads((run / 'process.json').read_text())
+                self.assertEqual(state['reason'], 'timeout')
+                self.assertTrue(state['runner_stopped'])
+                self.assertFalse(any(live(pid) for pid in runner_pids))
+                with self.assertRaises(dispatch.Refusal):
+                    with dispatch.scope_claim(self.root, 'example/service', ['src']): pass
+                process.send_signal(signal.SIGCONT)
+            elif mode == 'supervisor_killed':
+                os.kill(supervisor_pid, signal.SIGKILL)
+            elif mode == 'escaped':
+                self.assertEqual(os.getpgid(runner_pids[1]), runner_pids[1])
+                process.send_signal(signal.SIGTERM)
+            else:
+                process.send_signal(signal.SIGTERM)
+                time.sleep(0.02)
+                process.kill()
+            stdout, stderr = process.communicate(timeout=12)
+            if mode == 'term_then_kill':
+                end = time.monotonic() + 9
+                while not (run / 'process.json').exists() and time.monotonic() < end: time.sleep(0.02)
+                state = json.loads((run / 'process.json').read_text())
+                self.assertTrue(state['runner_stopped'])
+                self.assertFalse(any(live(pid) for pid in runner_pids))
+                self.assertTrue(list((self.root / '.agent-dispatch-locks').glob('*.json')))
+                return
+            receipt = json.loads((run / 'receipt.json').read_text())
+            self.assertEqual(receipt['result'], 'failed')
+            supervisor_finished = not live(supervisor_pid)
+            self.assertTrue(supervisor_finished)
+            if mode == 'supervisor_killed':
+                self.assertEqual(process.returncode, 2, (stdout, stderr))
+                self.assertEqual(receipt['error_type'], 'Refusal')
+                self.assertFalse(receipt['claim_release_safe'])
+                self.assertTrue(any(live(pid) for pid in runner_pids))
+            elif mode == 'escaped':
+                self.assertFalse(receipt['process']['runner_stopped'])
+                self.assertFalse(receipt['claim_release_safe'])
+                self.assertTrue(live(runner_pids[1]))
+                beat = self.checkout / 'src/child-beat'; before = beat.stat().st_size
+                time.sleep(0.15)
+                self.assertGreater(beat.stat().st_size, before)
+            else:
+                self.assertEqual(process.returncode, 1, (stdout, stderr))
+                self.assertTrue(receipt['claim_release_safe'])
+                self.assertEqual(receipt['process']['reason'], 'timeout')
+                self.assertFalse(list((self.root / '.agent-dispatch-locks').glob('*.json')))
+                return
+            with self.assertRaises(dispatch.Refusal):
+                with dispatch.scope_claim(self.root, 'example/service', ['src']): pass
+        finally:
+            if process.poll() is None: process.kill()
+            process.communicate(timeout=5)
+            if not runner_pids and pids.exists(): runner_pids = json.loads(pids.read_text())
+            for pid in [*runner_pids, *([supervisor_pid] if supervisor_pid is not None and not supervisor_finished else [])]:
+                try:
+                    if not live(pid): continue
+                    current = identity(pid)
+                    self.assertIn(pid, identities, 'missing initial identity; runner self-expires, do not signal')
+                    self.assertEqual(current, identities[pid], 'changed identity; do not signal')
+                    self.assertEqual(os.getsid(pid), supervisor_pid if pid == supervisor_pid else runner_pids[0])
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+            deadline = time.monotonic() + 5
+            while any(live(pid) for pid in runner_pids) and time.monotonic() < deadline: time.sleep(0.02)
+            self.assertFalse(any(live(pid) for pid in runner_pids), 'harness cleanup left a runner alive')
+
+    def test_setpgid_child_retains_claim_while_writing(self):
+        self.controlled_failure_journey('escaped')
+
+    def test_sigstop_dispatcher_does_not_stop_supervisor_deadline(self):
+        self.controlled_failure_journey('stopped_dispatcher')
+
+    def test_supervisor_sigkill_retains_claim_without_cleanup_claim(self):
+        self.controlled_failure_journey('supervisor_killed')
+
+    def test_sigterm_followed_by_sigkill_retains_claim_and_cleans_runner(self):
+        self.controlled_failure_journey('term_then_kill')
 
     def test_unconfirmed_group_cleanup_preserves_claim_and_failed_process_receipt(self):
         uncertain = dict(reason='completed', exit_code=0, captured_bytes=0, runner_stopped=False)
@@ -586,6 +748,104 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output.getvalue())['schema'], 'agent-dispatch-plan/v1')
         self.assertFalse((self.root / '.agent-dispatch-runs').exists())
+
+
+class SupervisorFailureTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+        self.addCleanup(lambda: [signal.signal(sig, handler) for sig, handler in self.handlers.items()])
+
+    def run_spec(self, name):
+        return dict(argv=[sys.executable, '-c', 'import time; time.sleep(20)'],
+                    checkout=str(self.root), seconds=1, output_limit=128, output_path=str(self.root / name / 'output.log'))
+
+    def test_all_uncertain_launch_exceptions_retain_claim(self):
+        for error in (RuntimeError('uncertain post-fork failure'),
+                      FileNotFoundError('failed exec not positively confirmed reaped'),
+                      OSError(errno.EIO, 'exec-status pipe read failed')):
+            with self.subTest(error=type(error).__name__):
+                spec = self.run_spec(type(error).__name__)
+                Path(spec['output_path']).parent.mkdir()
+                read_fd, write_fd = os.pipe()
+                try:
+                    with mock.patch.object(supervisor.subprocess, 'Popen', side_effect=error):
+                        result = supervisor.supervise(spec, read_fd)
+                    self.assertFalse(result['runner_stopped'])
+                    self.assertTrue(result['launch_uncertain'])
+                    self.assertEqual(result['error_type'], type(error).__name__)
+                    self.assertEqual(json.loads(Path(spec['output_path']).with_name('process.json').read_text()), result)
+                finally:
+                    with contextlib.suppress(OSError): os.close(read_fd)
+                    os.close(write_fd)
+
+    def test_close_failures_cannot_skip_runner_kill_or_receipt(self):
+        real_popen, real_close = subprocess.Popen, os.close
+        for failing in ('selector', 'descriptor'):
+            with self.subTest(failing=failing):
+                spec = self.run_spec(failing); Path(spec['output_path']).parent.mkdir()
+                read_fd, write_fd = os.pipe(); children = []
+                selector = mock.Mock()
+                selector.register.side_effect = RuntimeError('registration failed')
+                if failing == 'selector': selector.close.side_effect = OSError('selector close failed')
+                def launch(*args, **kwargs):
+                    child = real_popen(*args, **kwargs); children.append(child); return child
+                def close(fd):
+                    real_close(fd)
+                    if failing == 'descriptor' and fd == read_fd: raise OSError('descriptor close failed')
+                with tempfile.TemporaryFile() as input_file:
+                    try:
+                        with mock.patch.object(supervisor.selectors, 'DefaultSelector', return_value=selector), \
+                             mock.patch.object(supervisor.subprocess, 'Popen', side_effect=launch), \
+                             mock.patch.object(supervisor.os, 'close', side_effect=close), \
+                             mock.patch.object(supervisor.sys, 'stdin', mock.Mock(buffer=input_file)):
+                            result = supervisor.supervise(spec, read_fd)
+                        self.assertTrue(result['runner_stopped'])
+                        self.assertEqual(result['error_type'], 'RuntimeError')
+                        self.assertTrue(all(child.poll() is not None for child in children))
+                        self.assertEqual(json.loads(Path(spec['output_path']).with_name('process.json').read_text()), result)
+                    finally:
+                        for child in children:
+                            if child.poll() is None: child.kill()
+                            child.wait(timeout=5)
+                            child.stdout.close()
+                        with contextlib.suppress(OSError): real_close(read_fd)
+                        real_close(write_fd)
+
+    def test_session_inspection_fails_closed_on_unknown_or_live_member(self):
+        uid = os.getuid()
+        snapshot = (321, 0, f'123 456 {uid} S\n321 321 {uid} R\n')
+        with mock.patch.object(supervisor, 'process_snapshot', return_value=snapshot):
+            for observed in (PermissionError('denied'), ProcessLookupError(), 999):
+                with self.subTest(observed=observed), mock.patch.object(supervisor.os, 'getsid',
+                        side_effect=observed if isinstance(observed, Exception) else None,
+                        return_value=observed if isinstance(observed, int) else None):
+                    self.assertFalse(supervisor.group_stopped(999))
+            with mock.patch.object(supervisor.os, 'getsid', return_value=456) as getsid:
+                self.assertTrue(supervisor.group_stopped(999))
+                getsid.assert_called_once_with(123)  # Ignore only exact observer PID.
+        for output in ('', 'malformed row\n', '-1 0 -2 S\n'):
+            with self.subTest(output=output), mock.patch.object(supervisor, 'process_snapshot',
+                    return_value=(321, 0, output)):
+                self.assertFalse(supervisor.group_stopped(999))
+        for failure in (OSError('ps unavailable'), subprocess.TimeoutExpired('ps', 2)):
+            with self.subTest(failure=failure), mock.patch.object(supervisor, 'process_snapshot', side_effect=failure):
+                self.assertFalse(supervisor.group_stopped(999))
+
+    def test_disappearing_row_invalidates_snapshot_until_fresh_observation(self):
+        uid = os.getuid()
+        # Parent disappears after spawning an unseen child; that first scan
+        # must not release. A later complete scan observes the child session.
+        snapshots = [(321, 0, f'123 456 {uid} S\n321 321 {uid} R\n'),
+                     (322, 0, f'124 456 {uid} S\n322 322 {uid} R\n'),
+                     (323, 0, f'323 323 {uid} R\n')]
+        with mock.patch.object(supervisor, 'process_snapshot', side_effect=snapshots), \
+             mock.patch.object(supervisor.os, 'getsid', side_effect=[ProcessLookupError(), 999]):
+            self.assertFalse(supervisor.group_stopped(999))
+            self.assertFalse(supervisor.group_stopped(999))
+            self.assertTrue(supervisor.group_stopped(999))
 
 
 if __name__ == '__main__':
