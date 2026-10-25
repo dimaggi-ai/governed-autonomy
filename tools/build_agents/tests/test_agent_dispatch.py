@@ -834,6 +834,14 @@ class SupervisorFailureTests(unittest.TestCase):
             with self.subTest(failure=failure), mock.patch.object(supervisor, 'process_snapshot', side_effect=failure):
                 self.assertFalse(supervisor.group_stopped(999))
 
+    def test_other_uid_member_of_original_group_retains_claim(self):
+        other = os.getuid() + 1
+        with mock.patch.object(supervisor, 'process_snapshot',
+                return_value=(321, 0, f'123 999 {other} S\n')), \
+             mock.patch.object(supervisor.os, 'getsid',
+                side_effect=AssertionError('session check not reached')):
+            self.assertFalse(supervisor.group_stopped(999))
+
     def test_unrelated_zero_group_does_not_block_session_confirmation(self):
         uid = os.getuid()
         snapshot = (321, 0, f'123 0 {uid} S\n321 321 {uid} R\n')

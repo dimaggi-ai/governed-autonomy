@@ -113,9 +113,12 @@ afterwards. This is not a detached-service contract.
 Process IDs/session snapshots are observations, not durable authenticated process
 handles. The leader can be reaped before the group kill, leaving a PID/group-reuse
 race. Descendants creating a new session (`setsid`), changed UIDs, host failure,
+restricted process visibility (such as Linux [`hidepid`](https://www.kernel.org/doc/html/v6.17/filesystems/proc.html#mount-options)),
 a stopped/killed supervisor, scheduler stalls and uninterruptible kernel waits
-need an external OS/job supervisor and operator reconciliation. Snapshot scanning
-cannot prove the absence of all escaped or concurrently changing descendants.
+need an external OS/job supervisor and operator reconciliation. A successful
+snapshot can be filtered: this adapter cannot detect omitted processes and may
+confirm cleanup while a hidden member is still alive. Snapshot scanning cannot
+prove the absence of all escaped or concurrently changing descendants.
 This is **not OS containment** or hostile same-UID isolation; native harness
 sandboxes, tool policy and independent acceptance remain necessary.
 
