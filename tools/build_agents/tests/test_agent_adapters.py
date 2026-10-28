@@ -16,6 +16,11 @@ BASE_ROLES = ['dimaggi-coordinator', 'dimaggi-builder', 'dimaggi-assurance', 'di
               'dimaggi-product', 'dimaggi-infrastructure', 'dimaggi-economics']
 # Rendering of the seven roles at base ee08cd3, with the manifest digest line masked.
 BASE_RENDER_SHA256 = '664375b96bbc857299d817884b231af13d17a29ab5e9bde395c1684ed1921896'
+# The one intended common-instruction change since base: the peer-approval paragraph now records
+# Maggie's time-boxed exception (AGENTS.md and POLICY.md, 27 October 2026) instead of a blanket ban.
+BASE_PERMISSION_PARAGRAPH = ("Permission prompts. Never approve another agent's permission or access prompt. You may decline "
+                             "it and log the blocked action and reason. Escalate required access through the existing human "
+                             "decision route; do not work around a denial.")
 
 
 def claude_tools(content):
@@ -144,12 +149,28 @@ class ManifestRoleTests(unittest.TestCase):
     def test_existing_roles_render_unchanged_apart_from_manifest_digest(self):
         base = copy.deepcopy(self.manifest)
         base['roles'] = [r for r in base['roles'] if r['name'] in BASE_ROLES]
+        current = next(p for p in base['common_instructions'].split('\n') if p.startswith('Permission prompts.'))
+        base['common_instructions'] = base['common_instructions'].replace(current, BASE_PERMISSION_PARAGRAPH)
         mask = lambda v: re.sub(r'Role manifest SHA-256: [0-9a-f]{64}', 'Role manifest SHA-256: <digest>', v)
         blob = json.dumps({k: mask(v) for k, v in sorted(render(base).items())}, sort_keys=True)
         self.assertEqual(hashlib.sha256(blob.encode()).hexdigest(), BASE_RENDER_SHA256)
         for name in BASE_ROLES:   # and the same files come out of the nine-role manifest
             for path in (f'.codex/agents/{name}.toml', f'.claude/agents/{name}.md'):
-                self.assertEqual(mask(self.out[path]), mask(render(base)[path]))
+                self.assertEqual(mask(self.out[path]).replace(current, BASE_PERMISSION_PARAGRAPH),
+                                 mask(render(base)[path]))
+
+    def test_peer_approval_wording_matches_the_narrow_time_boxed_exception(self):
+        common = self.manifest['common_instructions']
+        para = next(p for p in common.split('\n') if p.startswith('Permission prompts.'))
+        for phrase in ('until 3 November 2026', 'only for reading files',
+                       "editing files inside the asking agent's own assigned paths", 'using synthetic data',
+                       'secrets or credentials', 'settings, hooks or Tool Guard policy', 'push, merge, deploy or publish',
+                       'deletes', 'payments or costs', 'new network destinations', 'log each approval in COORDINATION.md',
+                       'No permanent auto-approval configuration', 'the exception lapses', 'decline a prompt'):
+            self.assertIn(phrase, para)
+        self.assertEqual(common.count('Permission prompts.'), 1)
+        for text in self.out.values():   # every generated file carries the same wording
+            self.assertIn('until 3 November 2026', text)
 
     def test_exact_claude_tool_grants(self):
         expect = {'dimaggi-coordinator': 'scoped_writer', 'dimaggi-builder': 'scoped_writer',
