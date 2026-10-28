@@ -207,7 +207,7 @@ These sources guide contracts and configuration. They are not evidence that this
 
 ## Shared role definitions
 
-`config/roles.json` is the single source for both harnesses. Four core responsibilities and three on-demand lenses are reusable definitions, not seven continuously running agents.
+`config/roles.json` is the single source for both harnesses. Four core responsibilities, three on-demand lenses and two user-requested specialist roles are reusable definitions, not nine continuously running agents.
 
 | Role | Responsibility |
 | --- | --- |
@@ -218,6 +218,18 @@ These sources guide contracts and configuration. They are not evidence that this
 | dimaggi-product | On-demand product architecture and vertical integration review |
 | dimaggi-infrastructure | On-demand compute, network, capacity, SLO and runtime review |
 | dimaggi-economics | On-demand demand, supply, TCO, portability and obsolescence review |
+| dimaggi-security | Agentic security review: threat models, Tool Guard and Agent Trust boundaries, red lines; read-only |
+| dimaggi-si-labs | Seeded synthetic chaos simulations through a separately qualified runner; offline writer |
+
+Tool grants come from each role's `mode`. The manifest no longer caps the team at eight roles; `MAX_ROLES` (64) only bounds manifest size.
+
+| Mode | Claude tools (enforced by Claude Code) | Codex |
+| --- | --- | --- |
+| `read_only` | Read, Glob, Grep, WebFetch, WebSearch | Instruction only; inherits the parent sandbox |
+| `offline_writer` | Read, Glob, Grep, Write, Edit (no shell, no web) | Instruction only; inherits the parent sandbox |
+| `scoped_writer` | Read, Glob, Grep, Write, Edit, Bash, WebFetch, WebSearch | Instruction only; inherits the parent sandbox |
+
+Boundary accuracy: a Claude tool list removes tools from that subagent; it does not sandbox the parent session. Generated Codex TOML has no tool, sandbox, network or approval keys, so a Codex role's limits are instructions unless the parent Codex session is itself restricted. No role file establishes network isolation for either harness. Running code without network (for example the SI Labs harness) needs a separately qualified runner or sandbox, reviewed on its own.
 
 Data governance, operations and security are mandatory cross-cutting responsibilities in the manifest, not duplicate permanent teams. Add a permanent specialist only when measured workload and ownership justify one.
 
@@ -228,7 +240,7 @@ python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.jso
 python3 tools/build_agents/agent_adapters.py tools/build_agents/config/roles.json --destination /path/to/workspace --check
 ```
 
-The generator creates seven `.codex/agents/*.toml` and seven `.claude/agents/*.md` files. Start a fresh harness session to discover new definitions. Installation changes no sandbox, approval setting or credential. Existing different definitions require a reviewed migration preserving the previous manifest and files.
+The generator creates nine `.codex/agents/*.toml` and nine `.claude/agents/*.md` files. Start a fresh harness session to discover new definitions. Installation changes no sandbox, approval setting or credential. Existing different definitions require a reviewed migration preserving the previous manifest and files. Adding roles changes the manifest digest in every generated file, so a workspace holding the earlier seven files refuses this install until that migration runs.
 
 Runtime compatibility: on Codex CLI 0.160.0 in the inspected installation, named custom-role selection was not exposed even though the TOML files parsed. Explicit generic-subagent delegation with the reviewed role instructions was verified. If named selection is unavailable, the parent must read the generated role, pass its instructions to one scoped generic subagent, and label that fallback honestly; never silently emulate a delegated review. The child inherits the parent sandbox. Native named discovery must be rechecked after runtime upgrades.
 
