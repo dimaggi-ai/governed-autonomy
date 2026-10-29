@@ -223,13 +223,13 @@ These sources guide contracts and configuration. They are not evidence that this
 
 Tool grants come from each role's `mode`. The manifest no longer caps the team at eight roles; `MAX_ROLES` (64) only bounds manifest size.
 
-| Mode | Claude tools (enforced by Claude Code) | Codex |
+| Mode | Claude tools (declared in the generated frontmatter) | Codex |
 | --- | --- | --- |
 | `read_only` | Read, Glob, Grep, WebFetch, WebSearch | Instruction only; inherits the parent sandbox |
 | `offline_writer` | Read, Glob, Grep, Write, Edit (no shell, no web) | Instruction only; inherits the parent sandbox |
 | `scoped_writer` | Read, Glob, Grep, Write, Edit, Bash, WebFetch, WebSearch | Instruction only; inherits the parent sandbox |
 
-Boundary accuracy: a Claude tool list removes tools from that subagent; it does not sandbox the parent session. Generated Codex TOML has no tool, sandbox, network or approval keys, so a Codex role's limits are instructions unless the parent Codex session is itself restricted. No role file establishes network isolation for either harness. Running code without network (for example the SI Labs harness) needs a separately qualified runner or sandbox, reviewed on its own.
+Boundary accuracy: a Claude tool list declares the tools for that subagent. Named-role self-reports matched the declared lists, but deferred-tool exposure and harness-wide enforcement have not been independently verified. Either way, the list does not sandbox the parent session. Generated Codex TOML has no tool, sandbox, network or approval keys, so a Codex role's limits are instructions unless the parent Codex session is itself restricted. No role file establishes network isolation for either harness. Running code without network (for example the SI Labs harness) needs a separately qualified runner or sandbox, reviewed on its own.
 
 Data governance, operations and security are mandatory cross-cutting responsibilities in the manifest, not duplicate permanent teams. Add a permanent specialist only when measured workload and ownership justify one.
 

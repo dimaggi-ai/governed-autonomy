@@ -24,7 +24,9 @@ CLAUDE_TOOLS = {
 MODE_NOTES = {
     'read_only': '\nRead-only role: return findings; do not edit source or publish changes.',
     'offline_writer': ('\nOffline-writer role: edit only assigned paths; no shell, WebFetch or WebSearch.'
-                       ' The Claude adapter enforces this tool list. A Codex custom role inherits its parent'
+                       ' The Claude adapter declares the listed tools; named-role self-reports matched that list,'
+                       ' but deferred-tool exposure and harness-wide enforcement remain unverified.'
+                       ' A Codex custom role inherits its parent'
                        ' sandbox, so there this line is an instruction, not isolation. Code runs only through'
                        ' a separately qualified runner started outside this role.'),
     'scoped_writer': '',
